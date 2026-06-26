@@ -1,30 +1,31 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet.markercluster";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
-import { SUB_BY_ID } from "@/app/lib/categories";
+import { SUB_BY_ID, type FlatSub } from "@/app/lib/categories";
 import type { PoiFeature } from "@/app/lib/types";
 
 interface Props {
   center: [number, number];
   radius: number;
-  features: PoiFeature[];
+  featuresBySub: Record<string, PoiFeature[]>;
   visible: Record<string, boolean>;
 }
 
-export default function PostcodeMap({ center, radius, features, visible }: Props) {
+export default function PostcodeMap({ center, radius, featuresBySub, visible }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const circleRef = useRef<L.Circle | null>(null);
   const centerRef = useRef<[number, number]>(center);
-  // One Leaflet layer per subcategory id, plus a content signature so we only
-  // rebuild the layers whose feature set actually changed.
+  // One Leaflet layer per subcategory id, plus the feature array it was built
+  // from. Built lazily (only when a layer first becomes visible) and rebuilt
+  // only when that subcategory's array reference changes.
   const layersRef = useRef<Record<string, L.Layer>>({});
-  const sigRef = useRef<Record<string, string>>({});
+  const builtFromRef = useRef<Record<string, PoiFeature[]>>({});
 
   // Kept in sync via an effect (not during render) for use inside popup builders.
   useEffect(() => {
@@ -70,79 +71,86 @@ export default function PostcodeMap({ center, radius, features, visible }: Props
     map.fitBounds(circle.getBounds(), { padding: [20, 20] });
   }, [center, radius]);
 
-  // Build/update subcategory layers when the feature set changes. Only the
-  // subcategories whose contents changed are rebuilt; unchanged layers are left
-  // intact to avoid tearing down and recreating thousands of markers on every
-  // data load.
+  // Build a Leaflet layer (clustered markers, or a plain group for line
+  // geometry) for one subcategory's features. Popups read the live centre via
+  // `centerRef` so distances stay correct.
+  const buildLayer = useCallback((items: PoiFeature[], def: FlatSub): L.Layer => {
+    const hasLines = items.some((i) => i.line);
+    const group = hasLines
+      ? L.layerGroup()
+      : L.markerClusterGroup({
+          chunkedLoading: true,
+          // Cluster much more aggressively when zoomed out, easing off as the
+          // user zooms in to street level.
+          maxClusterRadius: clusterRadiusForZoom,
+          spiderfyOnMaxZoom: true,
+          iconCreateFunction: (cluster) => clusterIcon(cluster.getChildCount(), def.color),
+        });
+
+    for (const item of items) {
+      const popup = () => popupHtml(item, def.label, def.color, centerRef.current);
+      if (item.line) {
+        L.polyline(item.line, { color: def.color, weight: 3, opacity: 0.85 })
+          .bindPopup(popup)
+          .addTo(group);
+      } else {
+        L.marker([item.lat, item.lon], { icon: markerIcon(def.icon, def.color) })
+          .bindPopup(popup)
+          .addTo(group);
+      }
+    }
+    return group;
+  }, []);
+
+  // Reconcile subcategory layers with the data + visibility. Layers are built
+  // lazily (only when a subcategory is both visible and has data) and rebuilt
+  // only when that subcategory's feature array reference changes. Toggling a
+  // layer therefore does O(1) work per subcategory (add/remove an existing
+  // layer) rather than regrouping or re-signing every feature.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-
-    const bySub: Record<string, PoiFeature[]> = {};
-    for (const f of features) (bySub[f.subId] ??= []).push(f);
 
     // Drop layers for subcategories that no longer have any features.
     for (const subId of Object.keys(layersRef.current)) {
-      if (!(subId in bySub)) {
+      if (!featuresBySub[subId]) {
         layersRef.current[subId].remove();
         delete layersRef.current[subId];
-        delete sigRef.current[subId];
+        delete builtFromRef.current[subId];
       }
     }
 
-    for (const [subId, items] of Object.entries(bySub)) {
+    for (const [subId, items] of Object.entries(featuresBySub)) {
       const def = SUB_BY_ID[subId];
       if (!def) continue;
 
-      // Feature ids are unique and arrive in a stable order, so this signature
-      // changes only when the underlying data for the subcategory changes.
-      const sig = items.map((i) => i.id).join(",");
-      if (sigRef.current[subId] === sig && layersRef.current[subId]) continue;
+      const shouldShow = !!visible[subId];
+      const dataChanged = builtFromRef.current[subId] !== items;
 
-      layersRef.current[subId]?.remove();
-
-      const hasLines = items.some((i) => i.line);
-      const group = hasLines
-        ? L.layerGroup()
-        : L.markerClusterGroup({
-            chunkedLoading: true,
-            // Cluster much more aggressively when zoomed out, easing off as
-            // the user zooms in to street level.
-            maxClusterRadius: clusterRadiusForZoom,
-            spiderfyOnMaxZoom: true,
-            iconCreateFunction: (cluster) => clusterIcon(cluster.getChildCount(), def.color),
-          });
-
-      for (const item of items) {
-        const popup = () => popupHtml(item, def.label, def.color, centerRef.current);
-        if (item.line) {
-          L.polyline(item.line, { color: def.color, weight: 3, opacity: 0.85 })
-            .bindPopup(popup)
-            .addTo(group);
-        } else {
-          L.marker([item.lat, item.lon], { icon: markerIcon(def.icon, def.color) })
-            .bindPopup(popup)
-            .addTo(group);
+      if (!shouldShow) {
+        const existing = layersRef.current[subId];
+        if (existing) {
+          // Hide it; if the data also changed, drop the stale layer so the next
+          // show rebuilds from fresh data instead of keeping it around.
+          if (map.hasLayer(existing)) existing.remove();
+          if (dataChanged) {
+            delete layersRef.current[subId];
+            delete builtFromRef.current[subId];
+          }
         }
+        continue;
       }
 
-      layersRef.current[subId] = group;
-      sigRef.current[subId] = sig;
-      if (visible[subId]) group.addTo(map);
+      if (dataChanged || !layersRef.current[subId]) {
+        layersRef.current[subId]?.remove();
+        layersRef.current[subId] = buildLayer(items, def);
+        builtFromRef.current[subId] = items;
+      }
+      if (!map.hasLayer(layersRef.current[subId])) {
+        layersRef.current[subId].addTo(map);
+      }
     }
-  }, [features, visible]);
-
-  // Toggle subcategory layers without rebuilding them.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    for (const [subId, layer] of Object.entries(layersRef.current)) {
-      const shouldShow = !!visible[subId];
-      const isShown = map.hasLayer(layer);
-      if (shouldShow && !isShown) layer.addTo(map);
-      if (!shouldShow && isShown) layer.remove();
-    }
-  }, [visible]);
+  }, [featuresBySub, visible, buildLayer]);
 
   return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
 }

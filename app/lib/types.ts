@@ -40,6 +40,8 @@ export interface AreaData {
   counts: Record<string, number>;
   // Subcategory ids that have been fetched for the current area.
   loaded: Set<string>;
+  // Subcategory ids currently being fetched for the current area.
+  loading: Set<string>;
   // Subcategory ids whose per-category cap was hit for the current area.
   truncated: Set<string>;
 }

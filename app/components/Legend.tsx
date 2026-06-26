@@ -82,6 +82,7 @@ export default function Legend({
         );
         const onCount = g.subcategories.filter((s) => visible[s.id]).length;
         const allOn = onCount === g.subcategories.length;
+        const groupLoading = g.subcategories.some((s) => areaData.loading.has(s.id));
         return (
           <div key={g.id} className={styles.group}>
             <div className={styles.groupHeader}>
@@ -109,7 +110,9 @@ export default function Legend({
                 <span className={styles.caret}>{expanded[g.id] ? "▾" : "▸"}</span>
               </button>
               <span className={styles.count}>
-                {shownSubs.length > 0 ? (
+                {groupLoading ? (
+                  <span className={styles.rowSpinner} aria-label="Loading" />
+                ) : shownSubs.length > 0 ? (
                   groupCount
                 ) : (
                   <span className={styles.countMuted}>–</span>
@@ -136,7 +139,9 @@ export default function Legend({
                       )}
                     </span>
                     <span className={styles.count}>
-                      {visible[s.id] && areaData.loaded.has(s.id) ? (
+                      {areaData.loading.has(s.id) ? (
+                        <span className={styles.rowSpinner} aria-label="Loading" />
+                      ) : visible[s.id] && areaData.loaded.has(s.id) ? (
                         areaData.counts[s.id] ?? 0
                       ) : (
                         <span

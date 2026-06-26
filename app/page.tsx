@@ -13,7 +13,6 @@ import type {
 } from "@/app/lib/types";
 import SearchForm from "@/app/components/SearchForm";
 import Legend from "@/app/components/Legend";
-import LegendSkeleton from "@/app/components/LegendSkeleton";
 import styles from "./page.module.css";
 
 const PostcodeMap = dynamic(() => import("@/app/components/PostcodeMap"), {
@@ -23,6 +22,14 @@ const PostcodeMap = dynamic(() => import("@/app/components/PostcodeMap"), {
 
 const VISIBILITY_KEY = "walkabout.visibility.v4";
 const LAST_SEARCH_KEY = "walkabout.lastSearch.v2";
+// Per-tab cache of fetched features so a reload (or returning to a recent area)
+// is instant and avoids re-hitting Overpass. Bumped if the cache shape changes.
+const FEATURE_CACHE_KEY = "walkabout.featureCache.v1";
+
+interface PersistedCache {
+  cache: Record<string, PoiFeature[]>;
+  truncated: Record<string, boolean>;
+}
 
 interface SavedSearch {
   q: string;
@@ -51,7 +58,6 @@ export default function Home() {
   const [lastQuery, setLastQuery] = useState("");
   const [radius, setRadius] = useState(DEFAULT_RADIUS);
   const [geocoding, setGeocoding] = useState(false);
-  const [fetching, setFetching] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
   const [visible, setVisible] = useState<Record<string, boolean>>(defaultVisibility);
@@ -65,6 +71,8 @@ export default function Home() {
   // duplicate upstream requests.
   const [cache, setCache] = useState<Record<string, PoiFeature[]>>({});
   const [truncatedMap, setTruncatedMap] = useState<Record<string, boolean>>({});
+  // Keys (`${areaKey}::${subId}`) of subcategories currently being fetched.
+  const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
   const requestedRef = useRef<Set<string>>(new Set());
 
   const inflight = useRef<Set<AbortController>>(new Set());
@@ -72,7 +80,11 @@ export default function Home() {
 
   const areaKey = geo ? areaKeyFor(geo.center, radius) : null;
 
-  // Fetch any of the requested subcategories not already cached for this area.
+  // Fetch any of the requested subcategories not already cached for this area in
+  // a single batched request. Because React batches the visibility updates,
+  // bulk actions (initial load, "All", a group toggle, radius change) arrive as
+  // one many-id request, while flipping a single layer arrives as a one-id
+  // request — giving us efficient bulk loads with fine-grained single toggles.
   const loadSubs = useCallback(
     async (center: [number, number], r: number, subIds: string[]) => {
       const ak = areaKeyFor(center, r);
@@ -80,9 +92,19 @@ export default function Home() {
       if (missing.length === 0) return;
       for (const id of missing) requestedRef.current.add(`${ak}::${id}`);
 
+      const markLoading = (on: boolean) =>
+        setLoadingKeys((prev) => {
+          const next = new Set(prev);
+          for (const id of missing) {
+            if (on) next.add(`${ak}::${id}`);
+            else next.delete(`${ak}::${id}`);
+          }
+          return next;
+        });
+
       const controller = new AbortController();
       inflight.current.add(controller);
-      setFetching((f) => f + 1);
+      markLoading(true);
       try {
         const [lat, lon] = center;
         const poi = await fetchJson<OverpassResponse>(
@@ -110,7 +132,7 @@ export default function Home() {
         setError(e instanceof Error ? e.message : "Could not load map data.");
       } finally {
         inflight.current.delete(controller);
-        setFetching((f) => Math.max(0, f - 1));
+        markLoading(false);
       }
     },
     [],
@@ -124,6 +146,7 @@ export default function Home() {
       // New area: cancel any in-flight category fetches from the previous one.
       for (const c of inflight.current) c.abort();
       inflight.current.clear();
+      setLoadingKeys(new Set());
 
       setError(null);
       setGeocoding(true);
@@ -180,6 +203,23 @@ export default function Home() {
       if (saved) {
         const parsed = JSON.parse(saved) as Record<string, boolean>;
         setVisible((v) => ({ ...v, ...parsed }));
+      }
+    } catch {
+      /* ignore */
+    }
+
+    // Rehydrate the feature cache so revisiting a recent area paints instantly.
+    // Seeding `requestedRef` with the cached keys stops the load effect from
+    // re-fetching data we already have.
+    try {
+      const savedCache = sessionStorage.getItem(FEATURE_CACHE_KEY);
+      if (savedCache) {
+        const parsed = JSON.parse(savedCache) as PersistedCache;
+        if (parsed.cache) {
+          setCache(parsed.cache);
+          for (const key of Object.keys(parsed.cache)) requestedRef.current.add(key);
+        }
+        if (parsed.truncated) setTruncatedMap(parsed.truncated);
       }
     } catch {
       /* ignore */
@@ -245,10 +285,27 @@ export default function Home() {
     }
   }, [visible]);
 
+  // Persist the feature cache (per tab). Debounced so a burst of category loads
+  // serializes once rather than on every incremental update. Quota errors (the
+  // cache can grow across many areas) are swallowed.
+  useEffect(() => {
+    if (Object.keys(cache).length === 0) return;
+    const t = setTimeout(() => {
+      try {
+        const payload: PersistedCache = { cache, truncated: truncatedMap };
+        sessionStorage.setItem(FEATURE_CACHE_KEY, JSON.stringify(payload));
+      } catch {
+        /* ignore (e.g. storage quota exceeded) */
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [cache, truncatedMap]);
+
   // ---- Derived per-area data (counts, loaded set, truncation) --------------
   const areaData: AreaData = useMemo(() => {
     const counts: Record<string, number> = {};
     const loaded = new Set<string>();
+    const loading = new Set<string>();
     const truncated = new Set<string>();
     if (areaKey) {
       for (const s of SUBCATEGORIES) {
@@ -259,19 +316,24 @@ export default function Home() {
           counts[s.id] = arr.length;
           if (truncatedMap[key]) truncated.add(s.id);
         }
+        if (loadingKeys.has(key)) loading.add(s.id);
       }
     }
-    return { counts, loaded, truncated };
-  }, [areaKey, cache, truncatedMap]);
+    return { counts, loaded, loading, truncated };
+  }, [areaKey, cache, truncatedMap, loadingKeys]);
 
-  // All features loaded for the current area. Visibility is applied inside the
-  // map component (so toggling a layer no longer rebuilds the feature set).
-  const features = useMemo(() => {
-    if (!areaKey) return [] as PoiFeature[];
-    const out: PoiFeature[] = [];
+  // Features loaded for the current area, grouped by subcategory id. Passing the
+  // already-grouped structure lets the map skip a flatten+regroup, and because
+  // each value is the stable array straight from `cache`, the map can detect
+  // which subcategories changed by reference (no per-feature signature work).
+  // Visibility is applied inside the map component so toggling a layer doesn't
+  // rebuild the feature set.
+  const featuresBySub = useMemo(() => {
+    const out: Record<string, PoiFeature[]> = {};
+    if (!areaKey) return out;
     for (const s of SUBCATEGORIES) {
       const arr = cache[`${areaKey}::${s.id}`];
-      if (arr) out.push(...arr);
+      if (arr && arr.length) out[s.id] = arr;
     }
     return out;
   }, [areaKey, cache]);
@@ -285,9 +347,9 @@ export default function Home() {
     [visible, areaData],
   );
 
-  const busy = geocoding || fetching > 0;
-  const showSkeleton = busy && areaData.loaded.size === 0;
-  const showLegend = !!geo && areaData.loaded.size > 0;
+  const showLegend = !!geo;
+  // Keep a map indicator while geocoding a new area or loading any category.
+  const mapBusy = geocoding || areaData.loading.size > 0;
 
   // ---- Visibility toggles (loading handled by the effect above) ------------
   function toggleSub(id: string) {
@@ -349,8 +411,6 @@ export default function Home() {
           </p>
         )}
 
-        {showSkeleton && <LegendSkeleton />}
-
         {showLegend && (
           <Legend
             visible={visible}
@@ -370,7 +430,7 @@ export default function Home() {
           <PostcodeMap
             center={geo.center}
             radius={radius}
-            features={features}
+            featuresBySub={featuresBySub}
             visible={visible}
           />
         ) : (
@@ -378,7 +438,7 @@ export default function Home() {
             <p>Search an address to see the map.</p>
           </div>
         )}
-        {busy && (
+        {mapBusy && (
           <div className={styles.mapLoading}>
             <span className={styles.spinner} aria-hidden />
             <span>Loading map data…</span>

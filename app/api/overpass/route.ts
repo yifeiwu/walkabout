@@ -32,6 +32,53 @@ function nameFor(tags: Record<string, string> | undefined, kind: string): string
   return tags?.name ?? tags?.["operator"] ?? kind.replace(/_/g, " ");
 }
 
+// Perpendicular distance (in degrees) from point p to the infinite line a-b.
+// Planar approximation is fine at city scale and for shape-preserving thinning.
+function perpLineDist(
+  p: [number, number],
+  a: [number, number],
+  b: [number, number],
+): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return Math.hypot(p[0] - a[0], p[1] - a[1]);
+  return Math.abs(dx * (a[1] - p[1]) - (a[0] - p[0]) * dy) / len;
+}
+
+// Douglas-Peucker line simplification. Rail/road geometries from Overpass can
+// carry hundreds of nearly-collinear points; thinning them server-side shrinks
+// the payload and the number of polyline vertices the client has to draw.
+// epsilon ~ 0.00005 deg ≈ 5.5 m, well below marker scale.
+function simplifyLine(
+  pts: [number, number][],
+  epsilon = 0.00005,
+): [number, number][] {
+  const n = pts.length;
+  if (n <= 2) return pts;
+  const keep = new Array<boolean>(n).fill(false);
+  keep[0] = true;
+  keep[n - 1] = true;
+  const stack: [number, number][] = [[0, n - 1]];
+  while (stack.length) {
+    const [s, e] = stack.pop()!;
+    let maxD = 0;
+    let idx = -1;
+    for (let i = s + 1; i < e; i++) {
+      const d = perpLineDist(pts[i], pts[s], pts[e]);
+      if (d > maxD) {
+        maxD = d;
+        idx = i;
+      }
+    }
+    if (maxD > epsilon && idx !== -1) {
+      keep[idx] = true;
+      stack.push([s, idx], [idx, e]);
+    }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
 function kindFor(tags: Record<string, string> | undefined): string {
   if (!tags) return "place";
   return (
@@ -129,6 +176,9 @@ export async function GET(req: NextRequest) {
 
     if (cls.render === "line") {
       if (!el.geometry?.length) continue;
+      const line = simplifyLine(
+        el.geometry.map((g) => [g.lat, g.lon] as [number, number]),
+      );
       features.push({
         id: `${el.type}/${el.id}`,
         osmType: el.type,
@@ -137,9 +187,9 @@ export async function GET(req: NextRequest) {
         subId: cls.subId,
         name,
         kind,
-        lat: el.geometry[0].lat,
-        lon: el.geometry[0].lon,
-        line: el.geometry.map((g) => [g.lat, g.lon] as [number, number]),
+        lat: line[0][0],
+        lon: line[0][1],
+        line,
       });
       counts[cls.subId] = currentCount + 1;
       continue;

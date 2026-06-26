@@ -33,3 +33,13 @@ export interface OverpassResponse {
   // Subcategory ids whose per-category cap was hit.
   truncatedSubs: string[];
 }
+
+// Per-area summary derived from the feature cache, consumed by the legend.
+export interface AreaData {
+  // Feature count per subcategory id.
+  counts: Record<string, number>;
+  // Subcategory ids that have been fetched for the current area.
+  loaded: Set<string>;
+  // Subcategory ids whose per-category cap was hit for the current area.
+  truncated: Set<string>;
+}

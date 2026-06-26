@@ -21,10 +21,15 @@ export default function PostcodeMap({ center, radius, features, visible }: Props
   const mapRef = useRef<L.Map | null>(null);
   const circleRef = useRef<L.Circle | null>(null);
   const centerRef = useRef<[number, number]>(center);
-  // One Leaflet layer per subcategory id.
+  // One Leaflet layer per subcategory id, plus a content signature so we only
+  // rebuild the layers whose feature set actually changed.
   const layersRef = useRef<Record<string, L.Layer>>({});
+  const sigRef = useRef<Record<string, string>>({});
 
-  centerRef.current = center;
+  // Kept in sync via an effect (not during render) for use inside popup builders.
+  useEffect(() => {
+    centerRef.current = center;
+  }, [center]);
 
   // Initialise the map once.
   useEffect(() => {
@@ -62,27 +67,46 @@ export default function PostcodeMap({ center, radius, features, visible }: Props
     map.fitBounds(circle.getBounds(), { padding: [20, 20] });
   }, [center, radius]);
 
-  // Rebuild subcategory layers whenever the feature set changes.
+  // Build/update subcategory layers when the feature set changes. Only the
+  // subcategories whose contents changed are rebuilt; unchanged layers are left
+  // intact to avoid tearing down and recreating thousands of markers on every
+  // data load.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    for (const layer of Object.values(layersRef.current)) layer.remove();
-    layersRef.current = {};
-
     const bySub: Record<string, PoiFeature[]> = {};
     for (const f of features) (bySub[f.subId] ??= []).push(f);
+
+    // Drop layers for subcategories that no longer have any features.
+    for (const subId of Object.keys(layersRef.current)) {
+      if (!(subId in bySub)) {
+        layersRef.current[subId].remove();
+        delete layersRef.current[subId];
+        delete sigRef.current[subId];
+      }
+    }
 
     for (const [subId, items] of Object.entries(bySub)) {
       const def = SUB_BY_ID[subId];
       if (!def) continue;
+
+      // Feature ids are unique and arrive in a stable order, so this signature
+      // changes only when the underlying data for the subcategory changes.
+      const sig = items.map((i) => i.id).join(",");
+      if (sigRef.current[subId] === sig && layersRef.current[subId]) continue;
+
+      layersRef.current[subId]?.remove();
 
       const hasLines = items.some((i) => i.line);
       const group = hasLines
         ? L.layerGroup()
         : L.markerClusterGroup({
             chunkedLoading: true,
-            maxClusterRadius: 50,
+            // Cluster much more aggressively when zoomed out, easing off as
+            // the user zooms in to street level.
+            maxClusterRadius: clusterRadiusForZoom,
+            spiderfyOnMaxZoom: true,
             iconCreateFunction: (cluster) => clusterIcon(cluster.getChildCount(), def.color),
           });
 
@@ -100,10 +124,10 @@ export default function PostcodeMap({ center, radius, features, visible }: Props
       }
 
       layersRef.current[subId] = group;
+      sigRef.current[subId] = sig;
       if (visible[subId]) group.addTo(map);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [features]);
+  }, [features, visible]);
 
   // Toggle subcategory layers without rebuilding them.
   useEffect(() => {
@@ -118,6 +142,19 @@ export default function PostcodeMap({ center, radius, features, visible }: Props
   }, [visible]);
 
   return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
+}
+
+// Pixel radius within which markers are merged into a single cluster. The
+// plugin calls this once per zoom level: low zoom (zoomed out) gets a large
+// radius so far-apart markers collapse together, high zoom gets a small radius
+// so individual markers separate out at street level.
+function clusterRadiusForZoom(zoom: number): number {
+  if (zoom <= 8) return 160;
+  if (zoom <= 11) return 120;
+  if (zoom <= 13) return 90;
+  if (zoom <= 15) return 60;
+  if (zoom <= 17) return 40;
+  return 24;
 }
 
 function markerIcon(emoji: string, color: string): L.DivIcon {

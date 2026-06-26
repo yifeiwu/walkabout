@@ -1,12 +1,13 @@
 // Resilient fetch for upstream public OSM services: per-attempt timeout, a
-// retry, and (for Overpass) fallback across mirrors.
+// retry, and (for Overpass) sequential fallback across mirrors within an overall
+// time budget.
 
 export const USER_AGENT = "walkabout-map/1.0 (Australian address overlay explorer)";
 
 export const OVERPASS_ENDPOINTS = [
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   "https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
-  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
 
 interface FetchOptions {
@@ -48,39 +49,70 @@ export async function fetchResilient(url: string, opts: FetchOptions = {}): Prom
   throw lastErr ?? new Error("Upstream request failed");
 }
 
-// Query all Overpass mirrors in parallel and use whichever responds first with
-// a usable result. The public instances frequently queue requests behind a
-// limited number of slots, so racing them avoids being stuck behind one slow
-// mirror. Once a winner is found, the in-flight requests to the others are
-// aborted to be polite.
-export async function fetchOverpass(query: string, timeoutMs = 30000): Promise<Response> {
-  const data = encodeURIComponent(query);
-  const controllers = OVERPASS_ENDPOINTS.map(() => new AbortController());
+export interface OverpassOptions {
+  // Max time for any single mirror attempt.
+  perAttemptTimeoutMs?: number;
+  // Total time budget across all mirror attempts. Sized to stay comfortably
+  // within the serverless function's `maxDuration` so the route returns a
+  // graceful 502 rather than being killed by the platform.
+  overallBudgetMs?: number;
+  revalidate?: number;
+}
 
-  const racers = OVERPASS_ENDPOINTS.map(async (endpoint, i) => {
-    const timer = setTimeout(() => controllers[i].abort(), timeoutMs);
+// Fisher-Yates shuffle returning a new array (does not mutate the input).
+function shuffled<T>(items: readonly T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+// Try the Overpass mirrors one at a time, falling back to the next on failure,
+// non-OK status, or timeout. The order is randomized per request so load is
+// spread evenly across the public mirrors rather than always hammering the
+// same one first. Unlike racing all mirrors in parallel, this only loads one
+// public instance per request (kinder to the shared OSM infrastructure) while
+// still tolerating an individual mirror being down or slow. The whole
+// operation is bounded by `overallBudgetMs`.
+export async function fetchOverpass(
+  query: string,
+  opts: OverpassOptions = {},
+): Promise<Response> {
+  const perAttempt = opts.perAttemptTimeoutMs ?? 20_000;
+  const budget = opts.overallBudgetMs ?? 45_000;
+  const revalidate = opts.revalidate ?? 3600;
+  const data = encodeURIComponent(query);
+  const start = Date.now();
+  let lastErr: unknown;
+
+  for (const endpoint of shuffled(OVERPASS_ENDPOINTS)) {
+    const remaining = budget - (Date.now() - start);
+    if (remaining <= 0) break;
+    // Never wait longer than the remaining budget for this attempt.
+    const timeoutMs = Math.min(perAttempt, remaining);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(`${endpoint}?data=${data}`, {
         headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-        signal: controllers[i].signal,
-        next: { revalidate: 3600 },
+        signal: controller.signal,
+        next: { revalidate },
       });
-      // Treat non-OK as a failure so Promise.any can pick a working mirror.
-      if (!res.ok) throw new Error(`${endpoint} returned ${res.status}`);
-      return { res, index: i };
+      // Treat non-OK as a failure so we fall through to the next mirror.
+      if (!res.ok) {
+        lastErr = new Error(`${endpoint} returned ${res.status}`);
+        continue;
+      }
+      return res;
+    } catch (e) {
+      lastErr = e;
     } finally {
       clearTimeout(timer);
     }
-  });
-
-  try {
-    const { res, index } = await Promise.any(racers);
-    // Cancel the losing requests; leave the winner's body intact for reading.
-    controllers.forEach((c, i) => {
-      if (i !== index) c.abort();
-    });
-    return res;
-  } catch {
-    throw new Error("All Overpass mirrors failed");
   }
+
+  throw lastErr ?? new Error("All Overpass mirrors failed");
 }

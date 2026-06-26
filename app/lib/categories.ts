@@ -266,7 +266,10 @@ export function buildOverpassQuery(
   const around = `(around:${radiusMeters},${lat},${lon})`;
   const points = buildBody("point", around, subs);
   const lineBody = buildBody("line", around, subs);
-  const parts = [`[out:json][timeout:50];`];
+  // Keep the server-side timeout aligned with the client's per-attempt budget so
+  // a slow query fails fast enough to fall back to another mirror within the
+  // serverless function's time limit.
+  const parts = [`[out:json][timeout:20];`];
   if (points.trim().length) {
     parts.push(`(\n${points}\n);`);
     parts.push(`out tags center 6000;`);

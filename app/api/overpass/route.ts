@@ -3,8 +3,8 @@ import { buildOverpassQuery, classify, SUB_BY_ID } from "@/app/lib/categories";
 import type { OverpassResponse, PoiFeature } from "@/app/lib/types";
 import { fetchOverpass } from "@/app/lib/upstream";
 import { clientIp, rateLimit } from "@/app/lib/rateLimit";
+import { DEFAULT_RADIUS } from "@/app/lib/constants";
 
-const DEFAULT_RADIUS = 6000;
 const MAX_RADIUS = 10000;
 
 // Rough Australian bounding box (incl. Tasmania), used to reject coordinates
@@ -12,6 +12,11 @@ const MAX_RADIUS = 10000;
 const AU_BOUNDS = { minLat: -44, maxLat: -9, minLon: 112, maxLon: 154 };
 
 export const revalidate = 3600;
+
+// Cap the serverless function's wall-clock time. fetchOverpass works within a
+// smaller budget (see overallBudgetMs), so the route returns a graceful 502
+// before the platform would force-kill it.
+export const maxDuration = 60;
 
 interface OverpassElement {
   type: "node" | "way" | "relation";

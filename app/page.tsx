@@ -3,12 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { GROUPS, SUBCATEGORIES, defaultVisibility } from "@/app/lib/categories";
+import { RADIUS_OPTIONS } from "@/app/lib/constants";
+import { fetchJson } from "@/app/lib/fetchJson";
 import type {
-  AutocompleteItem,
+  AreaData,
   GeocodeResult,
   OverpassResponse,
   PoiFeature,
 } from "@/app/lib/types";
+import SearchForm from "@/app/components/SearchForm";
+import Legend from "@/app/components/Legend";
+import LegendSkeleton from "@/app/components/LegendSkeleton";
 import styles from "./page.module.css";
 
 const PostcodeMap = dynamic(() => import("@/app/components/PostcodeMap"), {
@@ -16,7 +21,6 @@ const PostcodeMap = dynamic(() => import("@/app/components/PostcodeMap"), {
   loading: () => <div className={styles.mapPlaceholder}>Loading map…</div>,
 });
 
-const RADIUS_OPTIONS = [1000, 3000, 5000];
 const VISIBILITY_KEY = "walkabout.visibility.v3";
 const LAST_SEARCH_KEY = "walkabout.lastSearch.v1";
 
@@ -36,13 +40,6 @@ const DEFAULT_SEARCH: SavedSearch = {
   radius: 1000,
 };
 
-async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T> {
-  const res = await fetch(url, { signal });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error ?? "Request failed.");
-  return json as T;
-}
-
 // Cache key for a subcategory's features at a given snapped area.
 function areaKeyFor(center: [number, number], radius: number): string {
   return `${center[0].toFixed(3)},${center[1].toFixed(3)},${radius}`;
@@ -61,21 +58,15 @@ export default function Home() {
     Object.fromEntries(GROUPS.map((g) => [g.id, g.subcategories.some((s) => s.defaultOn)])),
   );
 
-  const [suggestions, setSuggestions] = useState<AutocompleteItem[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [activeIdx, setActiveIdx] = useState(-1);
-
-  // Per-subcategory feature cache (keyed by `${areaKey}::${subId}`). Kept in a
-  // ref for synchronous reads; `cacheVersion` bumps to trigger re-renders.
-  const cacheRef = useRef<Record<string, PoiFeature[]>>({});
-  const truncRef = useRef<Record<string, boolean>>({});
-  const [cacheVersion, setCacheVersion] = useState(0);
+  // Per-subcategory feature cache (keyed by `${areaKey}::${subId}`), held in
+  // state so the derived legend/map data re-renders when new data arrives.
+  // `requestedRef` tracks keys already fetched or in-flight to avoid issuing
+  // duplicate upstream requests.
+  const [cache, setCache] = useState<Record<string, PoiFeature[]>>({});
+  const [truncatedMap, setTruncatedMap] = useState<Record<string, boolean>>({});
+  const requestedRef = useRef<Set<string>>(new Set());
 
   const inflight = useRef<Set<AbortController>>(new Set());
-  const acAbort = useRef<AbortController | null>(null);
-  const acTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const visibleRef = useRef(visible);
-  visibleRef.current = visible;
   const didInit = useRef(false);
 
   const areaKey = geo ? areaKeyFor(geo.center, radius) : null;
@@ -84,8 +75,9 @@ export default function Home() {
   const loadSubs = useCallback(
     async (center: [number, number], r: number, subIds: string[]) => {
       const ak = areaKeyFor(center, r);
-      const missing = subIds.filter((id) => !(`${ak}::${id}` in cacheRef.current));
+      const missing = subIds.filter((id) => !requestedRef.current.has(`${ak}::${id}`));
       if (missing.length === 0) return;
+      for (const id of missing) requestedRef.current.add(`${ak}::${id}`);
 
       const controller = new AbortController();
       inflight.current.add(controller);
@@ -98,12 +90,21 @@ export default function Home() {
         );
         const bySub: Record<string, PoiFeature[]> = {};
         for (const f of poi.features) (bySub[f.subId] ??= []).push(f);
-        for (const id of missing) {
-          cacheRef.current[`${ak}::${id}`] = bySub[id] ?? [];
-          if (poi.truncatedSubs.includes(id)) truncRef.current[`${ak}::${id}`] = true;
+        setCache((prev) => {
+          const next = { ...prev };
+          for (const id of missing) next[`${ak}::${id}`] = bySub[id] ?? [];
+          return next;
+        });
+        if (poi.truncatedSubs.length) {
+          setTruncatedMap((prev) => {
+            const next = { ...prev };
+            for (const id of poi.truncatedSubs) next[`${ak}::${id}`] = true;
+            return next;
+          });
         }
-        setCacheVersion((v) => v + 1);
       } catch (e) {
+        // Drop the keys so a later effect run can retry this area/subcategory.
+        for (const id of missing) requestedRef.current.delete(`${ak}::${id}`);
         if (e instanceof DOMException && e.name === "AbortError") return;
         setError(e instanceof Error ? e.message : "Could not load map data.");
       } finally {
@@ -124,7 +125,6 @@ export default function Home() {
       inflight.current.clear();
 
       setError(null);
-      setShowSuggestions(false);
       setGeocoding(true);
       const controller = new AbortController();
       inflight.current.add(controller);
@@ -170,6 +170,10 @@ export default function Home() {
     if (didInit.current) return;
     didInit.current = true;
 
+    // One-time initialization from browser state (localStorage + URL). These
+    // setState calls run once on mount and cannot happen during render (there is
+    // no window on the server), which is the accepted use of an init effect.
+    /* eslint-disable react-hooks/set-state-in-effect */
     try {
       const saved = localStorage.getItem(VISIBILITY_KEY);
       if (saved) {
@@ -212,6 +216,7 @@ export default function Home() {
     setLastQuery(initial.q);
     // Set geo directly (no geocode round-trip) so the map mounts immediately.
     setGeo({ center: initial.center, displayName: initial.displayName });
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [runSearch]);
 
   // Persist the last successful search so returning visitors land back here.
@@ -240,36 +245,35 @@ export default function Home() {
   }, [visible]);
 
   // ---- Derived per-area data (counts, loaded set, truncation) --------------
-  const areaData = useMemo(() => {
+  const areaData: AreaData = useMemo(() => {
     const counts: Record<string, number> = {};
     const loaded = new Set<string>();
     const truncated = new Set<string>();
     if (areaKey) {
       for (const s of SUBCATEGORIES) {
         const key = `${areaKey}::${s.id}`;
-        const arr = cacheRef.current[key];
+        const arr = cache[key];
         if (arr) {
           loaded.add(s.id);
           counts[s.id] = arr.length;
-          if (truncRef.current[key]) truncated.add(s.id);
+          if (truncatedMap[key]) truncated.add(s.id);
         }
       }
     }
     return { counts, loaded, truncated };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areaKey, cacheVersion]);
+  }, [areaKey, cache, truncatedMap]);
 
+  // All features loaded for the current area. Visibility is applied inside the
+  // map component (so toggling a layer no longer rebuilds the feature set).
   const features = useMemo(() => {
     if (!areaKey) return [] as PoiFeature[];
     const out: PoiFeature[] = [];
     for (const s of SUBCATEGORIES) {
-      if (!visible[s.id]) continue;
-      const arr = cacheRef.current[`${areaKey}::${s.id}`];
+      const arr = cache[`${areaKey}::${s.id}`];
       if (arr) out.push(...arr);
     }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areaKey, cacheVersion, visible]);
+  }, [areaKey, cache]);
 
   const totalFeatures = useMemo(
     () =>
@@ -283,56 +287,6 @@ export default function Home() {
   const busy = geocoding || fetching > 0;
   const showSkeleton = busy && areaData.loaded.size === 0;
   const showLegend = !!geo && areaData.loaded.size > 0;
-
-  // ---- Autocomplete --------------------------------------------------------
-  function onAddressChange(value: string) {
-    setAddress(value);
-    setActiveIdx(-1);
-    if (acTimer.current) clearTimeout(acTimer.current);
-    if (value.trim().length < 3) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-    acTimer.current = setTimeout(async () => {
-      acAbort.current?.abort();
-      const controller = new AbortController();
-      acAbort.current = controller;
-      try {
-        const items = await fetchJson<AutocompleteItem[]>(
-          `/api/autocomplete?q=${encodeURIComponent(value.trim())}`,
-          controller.signal,
-        );
-        setSuggestions(items);
-        setShowSuggestions(items.length > 0);
-      } catch {
-        /* ignore typeahead errors */
-      }
-    }, 300);
-  }
-
-  function selectSuggestion(item: AutocompleteItem) {
-    setAddress(item.label);
-    setSuggestions([]);
-    setShowSuggestions(false);
-    runSearch(item.label, radius, { center: item.center, displayName: item.label });
-  }
-
-  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (!showSuggestions || suggestions.length === 0) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveIdx((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" && activeIdx >= 0) {
-      e.preventDefault();
-      selectSuggestion(suggestions[activeIdx]);
-    } else if (e.key === "Escape") {
-      setShowSuggestions(false);
-    }
-  }
 
   // ---- Visibility toggles (loading handled by the effect above) ------------
   function toggleSub(id: string) {
@@ -358,62 +312,14 @@ export default function Home() {
           {(radius / 1000).toFixed(0)}km, from live OpenStreetMap data.
         </p>
 
-        <form
-          className={styles.form}
-          onSubmit={(e) => {
-            e.preventDefault();
-            runSearch(address, radius);
-          }}
-        >
-          <div className={styles.topRow}>
-            <div className={styles.searchWrap}>
-              <input
-                className={styles.input}
-                type="text"
-                placeholder="e.g. 100 George St, Sydney NSW"
-                value={address}
-                onChange={(e) => onAddressChange(e.target.value)}
-                onKeyDown={onKeyDown}
-                onFocus={() => suggestions.length && setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                aria-label="Australian address"
-                autoComplete="off"
-              />
-              {showSuggestions && (
-                <ul className={styles.suggestions}>
-                  {suggestions.map((s, i) => (
-                    <li
-                      key={`${s.label}-${i}`}
-                      className={`${styles.suggestion} ${i === activeIdx ? styles.suggestionActive : ""}`}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        selectSuggestion(s);
-                      }}
-                    >
-                      {s.label}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <select
-              id="radius"
-              className={styles.radiusSelect}
-              value={radius}
-              onChange={(e) => setRadius(parseInt(e.target.value, 10))}
-              aria-label="Search radius"
-            >
-              {RADIUS_OPTIONS.map((r) => (
-                <option key={r} value={r}>
-                  {(r / 1000).toFixed(0)} km
-                </option>
-              ))}
-            </select>
-          </div>
-          <button className={styles.button} type="submit" disabled={geocoding}>
-            {geocoding ? "Searching…" : "Show map"}
-          </button>
-        </form>
+        <SearchForm
+          value={address}
+          onValueChange={setAddress}
+          radius={radius}
+          onRadiusChange={setRadius}
+          onSearch={runSearch}
+          geocoding={geocoding}
+        />
 
         {error && <p className={styles.error}>{error}</p>}
 
@@ -433,97 +339,16 @@ export default function Home() {
         {showSkeleton && <LegendSkeleton />}
 
         {showLegend && (
-          <div className={styles.legend}>
-            <div className={styles.legendHeader}>
-              <span>Overlays</span>
-              <span className={styles.total}>{totalFeatures} places</span>
-            </div>
-            <div className={styles.legendActions}>
-              <button type="button" onClick={() => setAll(true)}>
-                Select all
-              </button>
-              <button type="button" onClick={() => setAll(false)}>
-                None
-              </button>
-            </div>
-
-            {GROUPS.map((g) => {
-              const shownSubs = g.subcategories.filter(
-                (s) => visible[s.id] && areaData.loaded.has(s.id),
-              );
-              const groupCount = shownSubs.reduce(
-                (sum, s) => sum + (areaData.counts[s.id] ?? 0),
-                0,
-              );
-              const onCount = g.subcategories.filter((s) => visible[s.id]).length;
-              const allOn = onCount === g.subcategories.length;
-              return (
-                <div key={g.id} className={styles.group}>
-                  <div className={styles.groupHeader}>
-                    <input
-                      type="checkbox"
-                      checked={allOn}
-                      ref={(el) => {
-                        if (el) el.indeterminate = onCount > 0 && !allOn;
-                      }}
-                      onChange={(e) => setGroup(g.id, e.target.checked)}
-                    />
-                    <span className={styles.swatch} style={{ background: g.color }} />
-                    <button
-                      type="button"
-                      className={styles.groupLabel}
-                      onClick={() => toggleExpand(g.id)}
-                    >
-                      {g.label}
-                      <span className={styles.caret}>{expanded[g.id] ? "▾" : "▸"}</span>
-                    </button>
-                    <span className={styles.count}>
-                      {shownSubs.length > 0 ? (
-                        groupCount
-                      ) : (
-                        <span className={styles.countMuted}>–</span>
-                      )}
-                    </span>
-                  </div>
-                  {expanded[g.id] && (
-                    <div className={styles.subList}>
-                      {g.subcategories.map((s) => (
-                        <label key={s.id} className={styles.subRow}>
-                          <input
-                            type="checkbox"
-                            checked={!!visible[s.id]}
-                            onChange={() => toggleSub(s.id)}
-                          />
-                          <span className={styles.subIcon}>{s.icon}</span>
-                          <span className={styles.subLabel}>
-                            {s.label}
-                            {areaData.truncated.has(s.id) && (
-                              <span className={styles.capped} title="Capped subset">
-                                {" "}
-                                (capped)
-                              </span>
-                            )}
-                          </span>
-                          <span className={styles.count}>
-                            {visible[s.id] && areaData.loaded.has(s.id) ? (
-                              areaData.counts[s.id] ?? 0
-                            ) : (
-                              <span
-                                className={styles.countMuted}
-                                title="Select to show on the map"
-                              >
-                                –
-                              </span>
-                            )}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <Legend
+            visible={visible}
+            expanded={expanded}
+            areaData={areaData}
+            totalFeatures={totalFeatures}
+            onToggleSub={toggleSub}
+            onSetGroup={setGroup}
+            onSetAll={setAll}
+            onToggleExpand={toggleExpand}
+          />
         )}
       </aside>
 
@@ -552,23 +377,5 @@ export default function Home() {
         Map data &copy; OpenStreetMap contributors. Coverage is best in Australian cities.
       </footer>
     </main>
-  );
-}
-
-function LegendSkeleton() {
-  return (
-    <div className={styles.legend} aria-busy="true">
-      <div className={styles.legendHeader}>
-        <span>Overlays</span>
-        <span className={styles.skelPill} />
-      </div>
-      {Array.from({ length: 7 }).map((_, i) => (
-        <div key={i} className={styles.skelRow}>
-          <span className={styles.skelBox} />
-          <span className={styles.skelLine} />
-          <span className={styles.skelCount} />
-        </div>
-      ))}
-    </div>
   );
 }

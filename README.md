@@ -1,7 +1,8 @@
 # Walkabout
 
 Enter an Australian address and see an interactive map of everything within a
-chosen radius (default **6 km**), built entirely on **OpenStreetMap** data.
+chosen radius (**1 / 3 / 5 km**, defaulting to **1 km**), built entirely on
+**OpenStreetMap** data.
 
 Overlays are organised as a two-level hierarchy of **groups → subcategories**,
 each toggleable individually or by group:
@@ -29,7 +30,8 @@ Coverage is best in Australian cities, where OSM transit and POI data is dense.
   popups showing distance from centre plus a link to the feature on OpenStreetMap.
 - **Loading states** — a map overlay spinner and a legend skeleton while data loads.
 - **Robustness** — in-flight request cancellation, per-IP rate limiting on the API
-  routes, request timeouts with retry, and fallback across multiple Overpass mirrors.
+  routes, request timeouts with retry, and sequential fallback across multiple
+  Overpass mirrors (with an overall time budget to stay within serverless limits).
 
 ## How it works
 
@@ -84,8 +86,8 @@ deploy. The `/api/*` routes run as serverless functions.
 
 - Nominatim and Overpass are free, shared, rate-limited services. Heavy use or a
   very large radius in a dense CBD can be slow or temporarily rate-limited.
-- A 6 km radius over a dense city can contain thousands of POIs; results are
-  capped (see `MAX_FEATURES` in
+- A large radius over a dense city can contain thousands of POIs; results are
+  capped per subcategory (see each subcategory's `maxFeatures` in
+  [`app/lib/categories.ts`](app/lib/categories.ts), enforced in
   [`app/api/overpass/route.ts`](app/api/overpass/route.ts)) and point layers are
   clustered to keep the map responsive.
-# walkabout

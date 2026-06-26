@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RADIUS_OPTIONS } from "@/app/lib/constants";
+import { RADIUS_OPTIONS, formatRadius } from "@/app/lib/constants";
 import { fetchJson } from "@/app/lib/fetchJson";
 import type { AutocompleteItem, GeocodeResult } from "@/app/lib/types";
 import styles from "../page.module.css";
@@ -211,7 +211,7 @@ export default function SearchForm({
             className={`${styles.radiusOption} ${radius === r ? styles.radiusOptionActive : ""}`}
             onClick={() => onRadiusChange(r)}
           >
-            {(r / 1000).toFixed(0)} km
+            {formatRadius(r)}
           </button>
         ))}
       </div>

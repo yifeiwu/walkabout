@@ -208,6 +208,36 @@ export const GROUPS: Group[] = [
       sub("nightlife", "Nightlife", "🎶", [PT("amenity", ["nightclub"])], { defaultOn: false }),
     ],
   },
+  {
+    id: "attractions",
+    label: "Attractions",
+    color: "#4f46e5",
+    icon: "🗺️",
+    subcategories: [
+      sub("landmarks", "Landmarks & Sights", "🗽", [
+        PT("tourism", ["attraction", "viewpoint", "artwork"]),
+        PT("historic", [
+          "monument",
+          "memorial",
+          "castle",
+          "ruins",
+          "monastery",
+          "fort",
+          "city_gate",
+          "archaeological_site",
+          "battlefield",
+        ]),
+        PT("man_made", ["tower", "lighthouse", "obelisk"]),
+      ]),
+      sub("museums", "Museums & Galleries", "🖼️", [
+        PT("tourism", ["museum", "gallery"]),
+      ]),
+      sub("themeparks", "Zoos & Theme Parks", "🎢", [
+        PT("tourism", ["zoo", "theme_park", "aquarium"]),
+        PT("leisure", ["water_park"]),
+      ]),
+    ],
+  },
 ];
 
 // ---- Derived lookups -------------------------------------------------------

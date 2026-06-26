@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { GROUPS, SUBCATEGORIES, defaultVisibility } from "@/app/lib/categories";
-import { RADIUS_OPTIONS } from "@/app/lib/constants";
+import { DEFAULT_RADIUS, RADIUS_OPTIONS, formatRadius } from "@/app/lib/constants";
 import { fetchJson } from "@/app/lib/fetchJson";
 import type {
   AreaData,
@@ -37,7 +37,7 @@ const DEFAULT_SEARCH: SavedSearch = {
   q: "Sydney NSW 2000",
   center: [-33.8688, 151.2093],
   displayName: "Sydney NSW, Australia",
-  radius: 1000,
+  radius: DEFAULT_RADIUS,
 };
 
 // Cache key for a subcategory's features at a given snapped area.
@@ -48,7 +48,7 @@ function areaKeyFor(center: [number, number], radius: number): string {
 export default function Home() {
   const [address, setAddress] = useState("");
   const [lastQuery, setLastQuery] = useState("");
-  const [radius, setRadius] = useState(1000);
+  const [radius, setRadius] = useState(DEFAULT_RADIUS);
   const [geocoding, setGeocoding] = useState(false);
   const [fetching, setFetching] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -187,7 +187,7 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search);
     const q = params.get("q");
     const r = parseInt(params.get("r") ?? "", 10);
-    const useRadius = r && RADIUS_OPTIONS.includes(r) ? r : 1000;
+    const useRadius = r && RADIUS_OPTIONS.includes(r) ? r : DEFAULT_RADIUS;
 
     // 1) URL params win (shareable links). 2) Otherwise restore the last
     // search. 3) Otherwise default to a city so the first paint is populated.
@@ -212,7 +212,7 @@ export default function Home() {
 
     const initial = restored ?? DEFAULT_SEARCH;
     setAddress(initial.q);
-    setRadius(RADIUS_OPTIONS.includes(initial.radius) ? initial.radius : 1000);
+    setRadius(RADIUS_OPTIONS.includes(initial.radius) ? initial.radius : DEFAULT_RADIUS);
     setLastQuery(initial.q);
     // Set geo directly (no geocode round-trip) so the map mounts immediately.
     setGeo({ center: initial.center, displayName: initial.displayName });
@@ -320,7 +320,7 @@ export default function Home() {
         <h1 className={styles.title}>Walkabout</h1>
         <p className={styles.subtitle}>
           Enter an address and find what&apos;s in your neighbourhood — everything within{" "}
-          {(radius / 1000).toFixed(0)}km, from live OpenStreetMap data.
+          {formatRadius(radius)}, from live OpenStreetMap data.
         </p>
 
         <SearchForm

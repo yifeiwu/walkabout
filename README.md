@@ -1,7 +1,7 @@
 # Walkabout
 
 Enter an Australian address and see an interactive map of everything within a
-chosen radius (**1 / 3 / 5 km**, defaulting to **1 km**), built entirely on
+chosen radius (**500 m / 1 km / 2 km**, defaulting to **500 m**), built entirely on
 **OpenStreetMap** data.
 
 Overlays are organised as a two-level hierarchy of **groups → subcategories**,
@@ -16,6 +16,7 @@ each toggleable individually or by group:
 - **Health** — pharmacies, medical & dental
 - **Money & Services** — banks & ATMs, fuel & EV charging
 - **Entertainment** — cinemas & theatres, nightlife
+- **Attractions** — landmarks & sights, museums & galleries, zoos & theme parks
 
 Coverage is best in Australian cities, where OSM transit and POI data is dense.
 

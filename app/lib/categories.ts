@@ -102,7 +102,7 @@ export const GROUPS: Group[] = [
     icon: "🍽️",
     subcategories: [
       sub("restaurants", "Restaurants", "🍽️", [PT("amenity", ["restaurant"])]),
-      sub("cafes", "Cafes", "☕", [PT("amenity", ["cafe"])], { defaultOn: true }),
+      sub("cafes", "Cafes", "☕", [PT("amenity", ["cafe"])]),
       sub("fast_food", "Fast Food", "🍔", [PT("amenity", ["fast_food", "food_court"])], {
         defaultOn: false,
       }),
@@ -214,28 +214,40 @@ export const GROUPS: Group[] = [
     color: "#4f46e5",
     icon: "🗺️",
     subcategories: [
-      sub("landmarks", "Landmarks & Sights", "🗽", [
-        PT("tourism", ["attraction", "viewpoint", "artwork"]),
-        PT("historic", [
-          "monument",
-          "memorial",
-          "castle",
-          "ruins",
-          "monastery",
-          "fort",
-          "city_gate",
-          "archaeological_site",
-          "battlefield",
-        ]),
-        PT("man_made", ["tower", "lighthouse", "obelisk"]),
-      ]),
-      sub("museums", "Museums & Galleries", "🖼️", [
-        PT("tourism", ["museum", "gallery"]),
-      ]),
-      sub("themeparks", "Zoos & Theme Parks", "🎢", [
-        PT("tourism", ["zoo", "theme_park", "aquarium"]),
-        PT("leisure", ["water_park"]),
-      ]),
+      sub(
+        "landmarks",
+        "Landmarks & Sights",
+        "🗽",
+        [
+          PT("tourism", ["attraction", "viewpoint", "artwork"]),
+          PT("historic", [
+            "monument",
+            "memorial",
+            "castle",
+            "ruins",
+            "monastery",
+            "fort",
+            "city_gate",
+            "archaeological_site",
+            "battlefield",
+          ]),
+          PT("man_made", ["tower", "lighthouse", "obelisk"]),
+        ],
+        { defaultOn: true },
+      ),
+      sub("museums", "Museums & Galleries", "🖼️", [PT("tourism", ["museum", "gallery"])], {
+        defaultOn: true,
+      }),
+      sub(
+        "themeparks",
+        "Zoos & Theme Parks",
+        "🎢",
+        [
+          PT("tourism", ["zoo", "theme_park", "aquarium"]),
+          PT("leisure", ["water_park"]),
+        ],
+        { defaultOn: true },
+      ),
     ],
   },
 ];

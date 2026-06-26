@@ -21,8 +21,8 @@ const PostcodeMap = dynamic(() => import("@/app/components/PostcodeMap"), {
   loading: () => <div className={styles.mapPlaceholder}>Loading map…</div>,
 });
 
-const VISIBILITY_KEY = "walkabout.visibility.v3";
-const LAST_SEARCH_KEY = "walkabout.lastSearch.v1";
+const VISIBILITY_KEY = "walkabout.visibility.v4";
+const LAST_SEARCH_KEY = "walkabout.lastSearch.v2";
 
 interface SavedSearch {
   q: string;
@@ -32,11 +32,12 @@ interface SavedSearch {
 }
 
 // Shown on the very first visit so the map is populated immediately rather than
-// presenting a blank prompt.
+// presenting a blank prompt. Centred on the Giant Koala at Dadswells Bridge so
+// the default Attractions layer has something to show off.
 const DEFAULT_SEARCH: SavedSearch = {
-  q: "Sydney NSW 2000",
-  center: [-33.8688, 151.2093],
-  displayName: "Sydney NSW, Australia",
+  q: "5829, Western Highway, Dadswells Bridge, Victoria, 3385, Australia",
+  center: [-36.918282, 142.5140123],
+  displayName: "5829 Western Highway, Dadswells Bridge, Victoria 3385, Australia",
   radius: DEFAULT_RADIUS,
 };
 

@@ -1,7 +1,7 @@
 // Resilient fetch for upstream public OSM services: per-attempt timeout, a
 // retry, and (for Overpass) fallback across mirrors.
 
-export const USER_AGENT = "walkscore-map/1.0 (Australian address overlay explorer)";
+export const USER_AGENT = "walkabout-map/1.0 (Australian address overlay explorer)";
 
 export const OVERPASS_ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "installCommand": "npm install",
+  "functions": {
+    "app/api/overpass/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/geocode/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/autocomplete/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}

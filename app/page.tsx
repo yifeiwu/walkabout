@@ -17,8 +17,8 @@ const PostcodeMap = dynamic(() => import("@/app/components/PostcodeMap"), {
 });
 
 const RADIUS_OPTIONS = [1000, 3000, 5000];
-const VISIBILITY_KEY = "walkscore.visibility.v3";
-const LAST_SEARCH_KEY = "walkscore.lastSearch.v1";
+const VISIBILITY_KEY = "walkabout.visibility.v3";
+const LAST_SEARCH_KEY = "walkabout.lastSearch.v1";
 
 interface SavedSearch {
   q: string;
@@ -354,8 +354,8 @@ export default function Home() {
       <aside className={styles.sidebar}>
         <h1 className={styles.title}>Walkabout</h1>
         <p className={styles.subtitle}>
-          Enter an Australian address to map what&apos;s within {(radius / 1000).toFixed(0)}km,
-          using live OpenStreetMap data.
+          Enter an address and find what&apos;s in your neighbourhood — everything within{" "}
+          {(radius / 1000).toFixed(0)}km, from live OpenStreetMap data.
         </p>
 
         <form

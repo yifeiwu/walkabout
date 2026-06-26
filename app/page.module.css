@@ -1,0 +1,420 @@
+.main {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  grid-template-rows: 1fr auto;
+  height: 100vh;
+  width: 100vw;
+}
+
+.sidebar {
+  grid-row: 1;
+  grid-column: 1;
+  padding: 24px 22px;
+  overflow-y: auto;
+  border-right: 1px solid #e5e7eb;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+  color: #111827;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.topRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.searchWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.radiusSelect {
+  flex-shrink: 0;
+  width: auto;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #f9fafb;
+  cursor: pointer;
+}
+
+.radiusSelect:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.input,
+.select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.suggestion {
+  padding: 8px 10px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #374151;
+  line-height: 1.35;
+}
+
+.suggestion:hover,
+.suggestionActive {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.button {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: #1d4ed8;
+}
+
+.button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.located {
+  margin: 0;
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* ---- Legend ---- */
+.legend {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.legendHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.total {
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.legendActions {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 8px;
+}
+
+.legendActions button {
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #374151;
+}
+
+.legendActions button:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.group {
+  border-top: 1px solid #f3f4f6;
+  padding: 4px 0;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.groupLabel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+  text-align: left;
+}
+
+.caret {
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.subList {
+  padding: 2px 0 4px 22px;
+}
+
+.subRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.subIcon {
+  width: 18px;
+  text-align: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.subLabel {
+  flex: 1;
+  color: #374151;
+}
+
+.capped {
+  color: #b45309;
+  font-size: 11px;
+}
+
+.count {
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.countMuted {
+  color: #d1d5db;
+}
+
+.footer {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  padding: 8px 16px;
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.5;
+  text-align: center;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+/* ---- Map area ---- */
+.mapArea {
+  grid-row: 1;
+  grid-column: 2;
+  position: relative;
+  height: 100%;
+}
+
+.empty,
+.mapPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #9ca3af;
+  font-size: 14px;
+  background: #f3f4f6;
+}
+
+.mapLoading {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(17, 24, 39, 0.85);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Skeleton ---- */
+.skelRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.skelBox,
+.skelLine,
+.skelCount,
+.skelPill {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 4px;
+}
+
+.skelBox {
+  width: 14px;
+  height: 14px;
+}
+
+.skelLine {
+  flex: 1;
+  height: 12px;
+}
+
+.skelCount {
+  width: 28px;
+  height: 12px;
+}
+
+.skelPill {
+  width: 60px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 70vh auto;
+    height: auto;
+  }
+  .sidebar {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .mapArea {
+    grid-row: 2;
+    grid-column: 1;
+    height: 70vh;
+  }
+  .footer {
+    grid-row: 3;
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { GROUPS } from "@/app/lib/categories";
+import { GROUPS, SUBCATEGORIES } from "@/app/lib/categories";
 import type { AreaData } from "@/app/lib/types";
 import styles from "../page.module.css";
 
@@ -26,6 +26,11 @@ export default function Legend({
   onSetAll,
   onToggleExpand,
 }: LegendProps) {
+  const totalLayers = SUBCATEGORIES.length;
+  const activeLayers = SUBCATEGORIES.reduce((n, s) => n + (visible[s.id] ? 1 : 0), 0);
+  const allOn = activeLayers === totalLayers;
+  const noneOn = activeLayers === 0;
+
   return (
     <div className={styles.legend}>
       <div className={styles.legendHeader}>
@@ -33,12 +38,38 @@ export default function Legend({
         <span className={styles.total}>{totalFeatures} places</span>
       </div>
       <div className={styles.legendActions}>
-        <button type="button" onClick={() => onSetAll(true)}>
-          Select all
-        </button>
-        <button type="button" onClick={() => onSetAll(false)}>
-          None
-        </button>
+        <span className={styles.layerCount} aria-live="polite">
+          <strong>{activeLayers}</strong> of {totalLayers} layers on
+        </span>
+        <div className={styles.legendActionButtons}>
+          <button
+            type="button"
+            onClick={() => onSetAll(true)}
+            disabled={allOn}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => onSetAll(false)}
+            disabled={noneOn}
+          >
+            None
+          </button>
+        </div>
+      </div>
+      <div
+        className={styles.layerMeter}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={totalLayers}
+        aria-valuenow={activeLayers}
+        aria-label="Active layers"
+      >
+        <span
+          className={styles.layerMeterFill}
+          style={{ width: `${totalLayers ? (activeLayers / totalLayers) * 100 : 0}%` }}
+        />
       </div>
 
       {GROUPS.map((g) => {
@@ -62,7 +93,13 @@ export default function Legend({
                 }}
                 onChange={(e) => onSetGroup(g.id, e.target.checked)}
               />
-              <span className={styles.swatch} style={{ background: g.color }} />
+              <span
+                className={styles.swatch}
+                style={{ background: g.color }}
+                aria-hidden
+              >
+                {g.icon}
+              </span>
               <button
                 type="button"
                 className={styles.groupLabel}

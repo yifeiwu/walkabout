@@ -31,6 +31,7 @@ export interface Group {
   id: string;
   label: string;
   color: string;
+  icon: string; // emoji glyph representing the group in the legend
   subcategories: SubCategory[];
 }
 
@@ -66,6 +67,7 @@ export const GROUPS: Group[] = [
     id: "transport",
     label: "Transport",
     color: "#2563eb",
+    icon: "🚉",
     subcategories: [
       sub("stations", "Train & Tram Stations", "🚉", [
         { types: ["node", "way"], key: "railway", values: ["station", "halt", "tram_stop"] },
@@ -97,6 +99,7 @@ export const GROUPS: Group[] = [
     id: "food",
     label: "Food & Drink",
     color: "#dc2626",
+    icon: "🍽️",
     subcategories: [
       sub("restaurants", "Restaurants", "🍽️", [PT("amenity", ["restaurant"])]),
       sub("cafes", "Cafes", "☕", [PT("amenity", ["cafe"])], { defaultOn: true }),
@@ -110,6 +113,7 @@ export const GROUPS: Group[] = [
     id: "shopping",
     label: "Shopping",
     color: "#ea580c",
+    icon: "🛍️",
     subcategories: [
       sub("supermarkets", "Supermarkets", "🛒", [PT("shop", ["supermarket"])]),
       sub("convenience", "Convenience & Grocery", "🏪", [
@@ -128,6 +132,7 @@ export const GROUPS: Group[] = [
     id: "parks",
     label: "Parks & Recreation",
     color: "#16a34a",
+    icon: "🌳",
     subcategories: [
       sub("parks", "Parks & Gardens", "🌳", [
         PT("leisure", ["park", "garden", "nature_reserve", "recreation_ground"]),
@@ -142,6 +147,7 @@ export const GROUPS: Group[] = [
     id: "education",
     label: "Education",
     color: "#7c3aed",
+    icon: "🎓",
     subcategories: [
       sub("schools", "Schools", "🏫", [PT("amenity", ["school"])]),
       sub("early_childhood", "Early Childhood", "🧸", [PT("amenity", ["kindergarten"])], {
@@ -154,6 +160,7 @@ export const GROUPS: Group[] = [
     id: "civic",
     label: "Civic & Community",
     color: "#0891b2",
+    icon: "🏛️",
     subcategories: [
       sub("libraries", "Libraries", "📚", [PT("amenity", ["library"])]),
       sub("community", "Community & Government", "🏛️", [
@@ -169,6 +176,7 @@ export const GROUPS: Group[] = [
     id: "health",
     label: "Health",
     color: "#db2777",
+    icon: "🏥",
     subcategories: [
       sub("pharmacies", "Pharmacies", "💊", [PT("amenity", ["pharmacy"])]),
       sub("medical", "Medical & Dental", "🏥", [
@@ -180,6 +188,7 @@ export const GROUPS: Group[] = [
     id: "services",
     label: "Money & Services",
     color: "#ca8a04",
+    icon: "🏧",
     subcategories: [
       sub("banks", "Banks & ATMs", "🏧", [PT("amenity", ["bank", "atm"])], { defaultOn: false }),
       sub("fuel", "Fuel & EV Charging", "⛽", [PT("amenity", ["fuel", "charging_station"])], {
@@ -191,6 +200,7 @@ export const GROUPS: Group[] = [
     id: "entertainment",
     label: "Entertainment",
     color: "#c026d3",
+    icon: "🎬",
     subcategories: [
       sub("cinemas", "Cinemas & Theatres", "🎬", [
         PT("amenity", ["cinema", "theatre", "arts_centre"]),

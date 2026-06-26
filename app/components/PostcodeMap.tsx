@@ -36,10 +36,13 @@ export default function PostcodeMap({ center, radius, features, visible }: Props
     if (mapRef.current || !containerRef.current) return;
     const map = L.map(containerRef.current, { scrollWheelZoom: true });
     map.setView([-25.27, 133.77], 4);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    // Light, muted basemap (CARTO Positron) so the colourful POI markers and
+    // clusters stand out far more than they do over the busy default OSM tiles.
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       maxZoom: 19,
+      subdomains: "abcd",
       attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     }).addTo(map);
     mapRef.current = map;
 

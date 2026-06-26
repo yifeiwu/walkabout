@@ -16,7 +16,8 @@ export default function RootLayout({
     <html lang="en">
       <head>
         {/* Warm up the connections the first interaction needs. */}
-        <link rel="preconnect" href="https://tile.openstreetmap.org" crossOrigin="" />
+        <link rel="preconnect" href="https://a.basemaps.cartocdn.com" crossOrigin="" />
+        <link rel="preconnect" href="https://b.basemaps.cartocdn.com" crossOrigin="" />
         <link rel="preconnect" href="https://nominatim.openstreetmap.org" crossOrigin="" />
         <link rel="dns-prefetch" href="https://maps.mail.ru" />
         <link rel="dns-prefetch" href="https://overpass-api.de" />

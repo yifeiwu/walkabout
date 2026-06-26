@@ -303,6 +303,17 @@ export default function Home() {
     setExpanded((e) => ({ ...e, [groupId]: !e[groupId] }));
   }
 
+  // Clearing the address resets the search to a clean state: drop the shareable
+  // query params and the remembered query so the URL no longer carries the
+  // previous (or default) location. The map keeps showing the last result.
+  function clearSearch() {
+    setLastQuery("");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("q");
+    url.searchParams.delete("r");
+    window.history.replaceState(null, "", url.toString());
+  }
+
   return (
     <main className={styles.main}>
       <aside className={styles.sidebar}>
@@ -318,6 +329,7 @@ export default function Home() {
           radius={radius}
           onRadiusChange={setRadius}
           onSearch={runSearch}
+          onClear={clearSearch}
           geocoding={geocoding}
         />
 

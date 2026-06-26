@@ -28,8 +28,6 @@ export interface PoiFeature {
 
 export interface OverpassResponse {
   features: PoiFeature[];
-  // Counts keyed by subcategory id.
-  counts: Record<string, number>;
   // Subcategory ids whose per-category cap was hit.
   truncatedSubs: string[];
 }

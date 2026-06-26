@@ -161,20 +161,19 @@ export async function GET(req: NextRequest) {
   const seen = new Set<string>();
 
   for (const el of data.elements ?? []) {
-    const cls = classify(el.tags);
-    if (!cls) continue;
+    const sub = classify(el.tags);
+    if (!sub) continue;
 
-    const subDef = SUB_BY_ID[cls.subId];
-    const currentCount = counts[cls.subId] ?? 0;
-    if (subDef && currentCount >= subDef.maxFeatures) {
-      truncatedSet.add(cls.subId);
+    const currentCount = counts[sub.id] ?? 0;
+    if (currentCount >= sub.maxFeatures) {
+      truncatedSet.add(sub.id);
       continue;
     }
 
     const kind = kindFor(el.tags);
     const name = nameFor(el.tags, kind);
 
-    if (cls.render === "line") {
+    if (sub.render === "line") {
       if (!el.geometry?.length) continue;
       const line = simplifyLine(
         el.geometry.map((g) => [g.lat, g.lon] as [number, number]),
@@ -183,15 +182,15 @@ export async function GET(req: NextRequest) {
         id: `${el.type}/${el.id}`,
         osmType: el.type,
         osmId: el.id,
-        groupId: cls.groupId,
-        subId: cls.subId,
+        groupId: sub.groupId,
+        subId: sub.id,
         name,
         kind,
         lat: line[0][0],
         lon: line[0][1],
         line,
       });
-      counts[cls.subId] = currentCount + 1;
+      counts[sub.id] = currentCount + 1;
       continue;
     }
 
@@ -199,7 +198,7 @@ export async function GET(req: NextRequest) {
     if (!point) continue;
 
     // Dedupe node/way duplicates by subcategory + name + rough location.
-    const dedupeKey = `${cls.subId}:${name}:${point.lat.toFixed(4)}:${point.lon.toFixed(4)}`;
+    const dedupeKey = `${sub.id}:${name}:${point.lat.toFixed(4)}:${point.lon.toFixed(4)}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 
@@ -207,19 +206,18 @@ export async function GET(req: NextRequest) {
       id: `${el.type}/${el.id}`,
       osmType: el.type,
       osmId: el.id,
-      groupId: cls.groupId,
-      subId: cls.subId,
+      groupId: sub.groupId,
+      subId: sub.id,
       name,
       kind,
       lat: point.lat,
       lon: point.lon,
     });
-    counts[cls.subId] = currentCount + 1;
+    counts[sub.id] = currentCount + 1;
   }
 
   const body: OverpassResponse = {
     features,
-    counts,
     truncatedSubs: [...truncatedSet],
   };
   // Cache at the CDN/edge so repeated or nearby (snapped) searches are instant.

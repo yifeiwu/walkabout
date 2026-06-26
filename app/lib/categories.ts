@@ -273,10 +273,6 @@ export const SUB_BY_ID: Record<string, FlatSub> = Object.fromEntries(
   SUBCATEGORIES.map((s) => [s.id, s]),
 );
 
-export const GROUP_BY_ID: Record<string, Group> = Object.fromEntries(
-  GROUPS.map((g) => [g.id, g]),
-);
-
 export function defaultVisibility(): Record<string, boolean> {
   return Object.fromEntries(SUBCATEGORIES.map((s) => [s.id, s.defaultOn]));
 }
@@ -333,22 +329,30 @@ export function buildOverpassQuery(
   return parts.join("\n");
 }
 
-export interface Classification {
-  groupId: string;
-  subId: string;
-  render: RenderKind;
-}
-
-// Classify an OSM element (by its tags) into the first matching subcategory.
-export function classify(tags: Record<string, string> | undefined): Classification | null {
-  if (!tags) return null;
-  for (const s of SUBCATEGORIES) {
-    for (const filter of s.filters) {
-      const value = tags[filter.key];
-      if (value && filter.values.includes(value)) {
-        return { groupId: s.groupId, subId: s.id, render: s.render };
-      }
+// Precomputed lookup from a concrete `key=value` tag pair to the subcategory it
+// belongs to, along with that subcategory's priority (its position in
+// SUBCATEGORIES). Built once at module load so classification of each Overpass
+// element is a handful of map lookups rather than a scan over every
+// subcategory/filter. First definition wins on duplicate pairs, preserving the
+// original "first matching subcategory" precedence.
+const CLASSIFY_INDEX = new Map<string, { sub: FlatSub; order: number }>();
+SUBCATEGORIES.forEach((sub, order) => {
+  for (const filter of sub.filters) {
+    for (const value of filter.values) {
+      const key = `${filter.key}=${value}`;
+      if (!CLASSIFY_INDEX.has(key)) CLASSIFY_INDEX.set(key, { sub, order });
     }
   }
-  return null;
+});
+
+// Classify an OSM element (by its tags) into the matching subcategory, choosing
+// the highest-priority one when several tags match.
+export function classify(tags: Record<string, string> | undefined): FlatSub | null {
+  if (!tags) return null;
+  let best: { sub: FlatSub; order: number } | null = null;
+  for (const key in tags) {
+    const hit = CLASSIFY_INDEX.get(`${key}=${tags[key]}`);
+    if (hit && (!best || hit.order < best.order)) best = hit;
+  }
+  return best ? best.sub : null;
 }

@@ -16,33 +16,33 @@ describe("classify", () => {
   it("maps amenities to the right subcategory and group", () => {
     expect(classify({ amenity: "cafe" })).toMatchObject({
       groupId: "food",
-      subId: "cafes",
+      id: "cafes",
       render: "point",
     });
     expect(classify({ amenity: "library" })).toMatchObject({
       groupId: "civic",
-      subId: "libraries",
+      id: "libraries",
     });
     expect(classify({ amenity: "school" })).toMatchObject({
       groupId: "education",
-      subId: "schools",
+      id: "schools",
     });
   });
 
   it("maps shop and leisure tags", () => {
-    expect(classify({ shop: "supermarket" })?.subId).toBe("supermarkets");
-    expect(classify({ leisure: "playground" })?.subId).toBe("playgrounds");
+    expect(classify({ shop: "supermarket" })?.id).toBe("supermarkets");
+    expect(classify({ leisure: "playground" })?.id).toBe("playgrounds");
   });
 
   it("classifies rail lines as line geometry", () => {
     const c = classify({ railway: "subway" });
-    expect(c?.subId).toBe("rail_lines");
+    expect(c?.id).toBe("rail_lines");
     expect(c?.render).toBe("line");
   });
 
   it("distinguishes stations from rail lines", () => {
-    expect(classify({ railway: "station" })?.subId).toBe("stations");
-    expect(classify({ railway: "tram" })?.subId).toBe("rail_lines");
+    expect(classify({ railway: "station" })?.id).toBe("stations");
+    expect(classify({ railway: "tram" })?.id).toBe("rail_lines");
   });
 });
 

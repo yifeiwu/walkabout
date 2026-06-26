@@ -29,7 +29,7 @@ Coverage is best in Australian cities, where OSM transit and POI data is dense.
   live counts, and a "capped" indicator when a layer hits its limit.
 - **Rich markers** — emoji icons in group colours, group-coloured clusters, and
   popups showing distance from centre plus a link to the feature on OpenStreetMap.
-- **Loading states** — a map overlay spinner and a legend skeleton while data loads.
+- **Loading states** — a map overlay spinner and per-layer loading indicators in the legend while data loads.
 - **Robustness** — in-flight request cancellation, per-IP rate limiting on the API
   routes, request timeouts with retry, and sequential fallback across multiple
   Overpass mirrors (with an overall time budget to stay within serverless limits).

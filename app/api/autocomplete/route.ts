@@ -49,5 +49,10 @@ export async function GET(req: NextRequest) {
     center: [parseFloat(d.lat), parseFloat(d.lon)],
   }));
 
-  return NextResponse.json(items);
+  // Identical query prefixes are common across users; let the CDN serve them.
+  return NextResponse.json(items, {
+    headers: {
+      "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
+    },
+  });
 }

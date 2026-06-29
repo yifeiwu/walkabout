@@ -82,5 +82,11 @@ export async function GET(req: NextRequest) {
     result.broadArea = latSpan > BROAD_AREA_DEG || lonSpan > BROAD_AREA_DEG;
   }
 
-  return NextResponse.json(result);
+  // Addresses don't move, so let the CDN/edge serve repeated or shared (e.g.
+  // linked) searches without re-hitting the function or Nominatim.
+  return NextResponse.json(result, {
+    headers: {
+      "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
+    },
+  });
 }

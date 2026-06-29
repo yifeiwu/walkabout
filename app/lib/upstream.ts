@@ -56,6 +56,10 @@ export interface OverpassOptions {
   // within the serverless function's `maxDuration` so the route returns a
   // graceful 502 rather than being killed by the platform.
   overallBudgetMs?: number;
+  // If the in-flight mirror hasn't responded within this window, start the next
+  // mirror in parallel ("hedging") rather than waiting out the full per-attempt
+  // timeout. Cuts tail latency when a mirror is slow but not failing.
+  hedgeDelayMs?: number;
   revalidate?: number;
 }
 
@@ -69,50 +73,114 @@ function shuffled<T>(items: readonly T[]): T[] {
   return out;
 }
 
-// Try the Overpass mirrors one at a time, falling back to the next on failure,
-// non-OK status, or timeout. The order is randomized per request so load is
-// spread evenly across the public mirrors rather than always hammering the
-// same one first. Unlike racing all mirrors in parallel, this only loads one
-// public instance per request (kinder to the shared OSM infrastructure) while
-// still tolerating an individual mirror being down or slow. The whole
-// operation is bounded by `overallBudgetMs`.
+// Try the Overpass mirrors with *hedging*: start one mirror (order randomized
+// per request so load is spread across the public instances), and if it hasn't
+// responded within `hedgeDelayMs`, start the next mirror in parallel rather than
+// waiting out the full per-attempt timeout. A failing/non-OK mirror triggers the
+// next one immediately. The first OK response wins and all other in-flight
+// attempts are aborted, so the common (fast) case still loads only one mirror —
+// kind to shared OSM infrastructure — while a slow or dead mirror no longer
+// blocks the whole request. The operation is bounded by `overallBudgetMs`.
 export async function fetchOverpass(
   query: string,
   opts: OverpassOptions = {},
 ): Promise<Response> {
-  const perAttempt = opts.perAttemptTimeoutMs ?? 20_000;
+  const perAttempt = opts.perAttemptTimeoutMs ?? 12_000;
   const budget = opts.overallBudgetMs ?? 45_000;
+  const hedgeDelayMs = opts.hedgeDelayMs ?? 3_500;
   const revalidate = opts.revalidate ?? 3600;
   const data = encodeURIComponent(query);
+  const endpoints = shuffled(OVERPASS_ENDPOINTS);
   const start = Date.now();
-  let lastErr: unknown;
+  const remaining = () => budget - (Date.now() - start);
 
-  for (const endpoint of shuffled(OVERPASS_ENDPOINTS)) {
-    const remaining = budget - (Date.now() - start);
-    if (remaining <= 0) break;
-    // Never wait longer than the remaining budget for this attempt.
-    const timeoutMs = Math.min(perAttempt, remaining);
+  return new Promise<Response>((resolve, reject) => {
+    const controllers = new Set<AbortController>();
+    const errors: unknown[] = [];
+    let nextIdx = 0;
+    let active = 0;
+    let settled = false;
+    let hedgeTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetch(`${endpoint}?data=${data}`, {
+    const clearHedge = () => {
+      if (hedgeTimer) {
+        clearTimeout(hedgeTimer);
+        hedgeTimer = null;
+      }
+    };
+
+    const succeed = (res: Response, winner: AbortController) => {
+      if (settled) return;
+      settled = true;
+      clearHedge();
+      for (const c of controllers) if (c !== winner) c.abort();
+      resolve(res);
+    };
+
+    // Reject only once nothing is running, nothing is scheduled, and there are
+    // no more mirrors (or budget) left to try.
+    const failIfDone = () => {
+      if (settled) return;
+      if (
+        active === 0 &&
+        !hedgeTimer &&
+        (nextIdx >= endpoints.length || remaining() <= 0)
+      ) {
+        settled = true;
+        reject(errors[errors.length - 1] ?? new Error("All Overpass mirrors failed"));
+      }
+    };
+
+    const scheduleHedge = () => {
+      if (settled || hedgeTimer || nextIdx >= endpoints.length) return;
+      const r = remaining();
+      if (r <= 0) return;
+      hedgeTimer = setTimeout(() => {
+        hedgeTimer = null;
+        launchNext();
+      }, Math.min(hedgeDelayMs, r));
+    };
+
+    const launchNext = () => {
+      if (settled) return;
+      const r = remaining();
+      if (nextIdx >= endpoints.length || r <= 0) {
+        failIfDone();
+        return;
+      }
+      const endpoint = endpoints[nextIdx++];
+      const controller = new AbortController();
+      controllers.add(controller);
+      active++;
+      const timer = setTimeout(() => controller.abort(), Math.min(perAttempt, r));
+
+      // Speculatively hedge to the next mirror if this one is slow.
+      scheduleHedge();
+
+      fetch(`${endpoint}?data=${data}`, {
         headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
         signal: controller.signal,
         next: { revalidate },
-      });
-      // Treat non-OK as a failure so we fall through to the next mirror.
-      if (!res.ok) {
-        lastErr = new Error(`${endpoint} returned ${res.status}`);
-        continue;
-      }
-      return res;
-    } catch (e) {
-      lastErr = e;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`${endpoint} returned ${res.status}`);
+          succeed(res, controller);
+        })
+        .catch((e) => {
+          if (settled) return;
+          errors.push(e);
+          // This mirror failed — don't wait out the hedge delay, try the next now.
+          clearHedge();
+          launchNext();
+        })
+        .finally(() => {
+          clearTimeout(timer);
+          controllers.delete(controller);
+          active--;
+          failIfDone();
+        });
+    };
 
-  throw lastErr ?? new Error("All Overpass mirrors failed");
+    launchNext();
+  });
 }

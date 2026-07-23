@@ -197,24 +197,26 @@ export default function SearchForm({
         )}
       </div>
 
-      <div
-        className={styles.radiusGroup}
-        role="radiogroup"
-        aria-label="Search radius"
-      >
-        {RADIUS_OPTIONS.map((r) => (
-          <button
-            key={r}
-            type="button"
-            role="radio"
-            aria-checked={radius === r}
-            className={`${styles.radiusOption} ${radius === r ? styles.radiusOptionActive : ""}`}
-            onClick={() => onRadiusChange(r)}
-          >
-            {formatRadius(r)}
-          </button>
-        ))}
-      </div>
+      {RADIUS_OPTIONS.length > 1 && (
+        <div
+          className={styles.radiusGroup}
+          role="radiogroup"
+          aria-label="Search radius"
+        >
+          {RADIUS_OPTIONS.map((r) => (
+            <button
+              key={r}
+              type="button"
+              role="radio"
+              aria-checked={radius === r}
+              className={`${styles.radiusOption} ${radius === r ? styles.radiusOptionActive : ""}`}
+              onClick={() => onRadiusChange(r)}
+            >
+              {formatRadius(r)}
+            </button>
+          ))}
+        </div>
+      )}
 
       <button className={styles.button} type="submit" disabled={geocoding}>
         {geocoding ? "Searching…" : "Show map"}

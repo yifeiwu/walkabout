@@ -154,7 +154,18 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const data = (await res.json()) as { elements: OverpassElement[] };
+  let data: { elements: OverpassElement[] };
+  try {
+    data = (await res.json()) as { elements: OverpassElement[] };
+  } catch {
+    // A mirror can return a 200 with a non-JSON body (e.g. an HTML error/status
+    // page). Surface the same graceful 502 as an unreachable upstream rather than
+    // letting the parse throw and 500.
+    return NextResponse.json(
+      { error: "Could not reach the Overpass (OpenStreetMap) service. Try again shortly." },
+      { status: 502 },
+    );
+  }
   const features: PoiFeature[] = [];
   const counts: Record<string, number> = {};
   const truncatedSet = new Set<string>();

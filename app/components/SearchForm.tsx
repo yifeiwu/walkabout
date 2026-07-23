@@ -219,7 +219,7 @@ export default function SearchForm({
       )}
 
       <button className={styles.button} type="submit" disabled={geocoding}>
-        {geocoding ? "Searching…" : "Show map"}
+        {geocoding ? "Searching…" : "Search"}
       </button>
     </form>
   );

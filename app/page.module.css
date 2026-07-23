@@ -18,6 +18,15 @@
   gap: 16px;
 }
 
+/* Drawer chrome (toggle button, grab handle, backdrop) is mobile-only; hidden
+   on desktop where the sidebar is permanently docked. Overridden in the
+   max-width media query below. */
+.drawerToggle,
+.drawerHandle,
+.drawerBackdrop {
+  display: none;
+}
+
 .title {
   font-size: 22px;
   font-weight: 700;
@@ -155,7 +164,7 @@
   font-size: 13px;
   border-radius: 6px;
   cursor: pointer;
-  color: #374151;
+  color: var(--text-soft);
   line-height: 1.35;
 }
 
@@ -209,15 +218,15 @@
   margin: 0;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--danger-bg);
+  color: var(--danger-text);
   font-size: 13px;
 }
 
 .located {
   margin: 0;
   font-size: 12px;
-  color: #374151;
+  color: var(--text-soft);
   line-height: 1.4;
 }
 
@@ -225,8 +234,8 @@
   margin: 0;
   padding: 8px 10px;
   border-radius: 8px;
-  background: #fffbeb;
-  color: #b45309;
+  background: var(--warning-bg);
+  color: var(--warning-text);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -290,7 +299,7 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  color: #374151;
+  color: var(--text-soft);
   transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
 
@@ -323,7 +332,7 @@
 }
 
 .group {
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--border-subtle);
   padding: 4px 0;
 }
 
@@ -333,7 +342,14 @@
   gap: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
+}
+
+/* Brand the native checkboxes to match the accent used across the UI. */
+.groupHeader input[type="checkbox"],
+.subRow input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .swatch {
@@ -360,13 +376,13 @@
   padding: 0;
   font: inherit;
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
   cursor: pointer;
   text-align: left;
 }
 
 .caret {
-  color: #9ca3af;
+  color: var(--text-subtle);
   font-size: 11px;
 }
 
@@ -399,22 +415,22 @@
 
 .subLabel {
   flex: 1;
-  color: #374151;
+  color: var(--text-soft);
 }
 
 .capped {
-  color: #b45309;
+  color: var(--warning-text);
   font-size: 11px;
 }
 
 .count {
-  color: #6b7280;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   font-size: 12px;
 }
 
 .countMuted {
-  color: #d1d5db;
+  color: var(--text-faint);
 }
 
 .rowSpinner {
@@ -422,7 +438,7 @@
   width: 12px;
   height: 12px;
   border: 2px solid rgba(17, 24, 39, 0.18);
-  border-top-color: #6b7280;
+  border-top-color: var(--text-muted);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   vertical-align: middle;
@@ -454,9 +470,9 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 14px;
-  background: #f3f4f6;
+  background: var(--surface-sunken);
 }
 
 .mapLoading {
@@ -469,7 +485,7 @@
   align-items: center;
   gap: 10px;
   padding: 8px 16px;
-  background: rgba(17, 24, 39, 0.85);
+  background: var(--overlay);
   color: #fff;
   border-radius: 999px;
   font-size: 13px;
@@ -490,70 +506,93 @@
   }
 }
 
-/* ---- Skeleton ---- */
-.skelRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-}
-
-.skelBox,
-.skelLine,
-.skelCount,
-.skelPill {
-  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%);
-  background-size: 400% 100%;
-  animation: shimmer 1.4s ease infinite;
-  border-radius: 4px;
-}
-
-.skelBox {
-  width: 14px;
-  height: 14px;
-}
-
-.skelLine {
-  flex: 1;
-  height: 12px;
-}
-
-.skelCount {
-  width: 28px;
-  height: 12px;
-}
-
-.skelPill {
-  width: 60px;
-  height: 12px;
-  border-radius: 999px;
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: 0 0;
-  }
-}
-
 @media (max-width: 720px) {
+  /* Map fills the viewport; the sidebar becomes a bottom-sheet drawer layered
+     on top of it. */
   .main {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 70vh auto;
-    height: auto;
-  }
-  .sidebar {
-    grid-row: 1;
-    grid-column: 1;
+    grid-template-rows: 1fr;
+    height: 100vh;
   }
   .mapArea {
-    grid-row: 2;
+    grid-row: 1;
     grid-column: 1;
-    height: 70vh;
+    height: 100vh;
   }
+  /* The desktop footer bar is redundant on mobile — Leaflet's own attribution
+     control still credits OpenStreetMap/CARTO. */
   .footer {
-    grid-row: 3;
+    display: none;
+  }
+
+  /* Floating pill that opens the drawer. */
+  .drawerToggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 1000;
+    padding: 11px 18px;
+    border: none;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: var(--shadow-lg);
+    cursor: pointer;
+  }
+
+  /* Dim + block the map behind the open drawer. */
+  .drawerBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: var(--overlay);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+  }
+  .drawerBackdropVisible {
+    opacity: 0.4;
+    pointer-events: auto;
+  }
+
+  /* Bottom sheet: docked off-screen by default, slides up when open. */
+  .sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1200;
+    max-height: 85vh;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    box-shadow: var(--shadow-lg);
+    padding-top: 20px;
+    transform: translateY(100%);
+    transition: transform 0.28s ease;
+  }
+  .sidebarOpen {
+    transform: translateY(0);
+  }
+
+  /* Grab handle affordance at the top of the sheet. */
+  .drawerHandle {
+    display: block;
+    align-self: center;
+    width: 40px;
+    height: 4px;
+    margin: -8px 0 4px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--border-strong);
+    cursor: pointer;
   }
 }

@@ -57,6 +57,10 @@ export default function Home() {
   const [address, setAddress] = useState("");
   const [lastQuery, setLastQuery] = useState("");
   const [radius, setRadius] = useState(DEFAULT_RADIUS);
+  // Controls the mobile bottom-sheet drawer (no effect on desktop, where the
+  // sidebar is always docked). Closed by default so the map is front-and-centre
+  // on small screens.
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
@@ -379,7 +383,30 @@ export default function Home() {
 
   return (
     <main className={styles.main}>
-      <aside className={styles.sidebar}>
+      {/* Mobile-only: opens the bottom-sheet drawer. Hidden on desktop. */}
+      <button
+        type="button"
+        className={styles.drawerToggle}
+        onClick={() => setDrawerOpen(true)}
+        aria-label="Open search and filters"
+      >
+        🔎 Search &amp; filters
+      </button>
+      {/* Mobile-only backdrop; tapping it dismisses the drawer. */}
+      <div
+        className={`${styles.drawerBackdrop} ${drawerOpen ? styles.drawerBackdropVisible : ""}`}
+        onClick={() => setDrawerOpen(false)}
+        aria-hidden
+      />
+
+      <aside className={`${styles.sidebar} ${drawerOpen ? styles.sidebarOpen : ""}`}>
+        {/* Mobile-only grab handle to collapse the drawer. Hidden on desktop. */}
+        <button
+          type="button"
+          className={styles.drawerHandle}
+          onClick={() => setDrawerOpen(false)}
+          aria-label="Close search and filters"
+        />
         <h1 className={styles.title}>Walkabout</h1>
         <p className={styles.subtitle}>
           Enter an address and find what&apos;s in your neighbourhood — everything within{" "}
@@ -391,7 +418,10 @@ export default function Home() {
           onValueChange={setAddress}
           radius={radius}
           onRadiusChange={setRadius}
-          onSearch={runSearch}
+          onSearch={(q, r, pre) => {
+            setDrawerOpen(false);
+            runSearch(q, r, pre);
+          }}
           onClear={clearSearch}
           geocoding={geocoding}
         />

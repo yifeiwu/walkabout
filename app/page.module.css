@@ -23,6 +23,7 @@
    max-width media query below. */
 .drawerToggle,
 .drawerHandle,
+.drawerClose,
 .drawerBackdrop {
   display: none;
 }
@@ -413,6 +414,11 @@
   padding: 2px 0 4px 22px;
 }
 
+.subItem {
+  display: flex;
+  flex-direction: column;
+}
+
 .subRow {
   display: flex;
   align-items: center;
@@ -421,12 +427,28 @@
   margin: 0 -6px;
   border-radius: 6px;
   font-size: 13px;
-  cursor: pointer;
   transition: background 0.12s;
 }
 
 .subRow:hover {
   background: var(--surface-muted);
+}
+
+/* Label as an expand toggle for the entry list (mirrors .groupLabel). */
+.subLabelButton {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text-soft);
+  cursor: pointer;
+  text-align: left;
 }
 
 .subIcon {
@@ -445,12 +467,65 @@
 
 .subLabel {
   flex: 1;
+  min-width: 0;
   color: var(--text-soft);
 }
 
 .capped {
   color: var(--warning-text);
   font-size: 11px;
+}
+
+/* ---- Subcategory entry list (individual fetched POIs) ---- */
+.entryList {
+  list-style: none;
+  margin: 2px 0 4px;
+  padding: 0 0 2px 26px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.entryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-soft);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+
+.entryRow:hover {
+  background: var(--surface-muted);
+  color: var(--accent-hover);
+}
+
+.entryName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entryDist {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.entryMore {
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--text-subtle);
 }
 
 .count {
@@ -624,5 +699,36 @@
     border-radius: 999px;
     background: var(--border-strong);
     cursor: pointer;
+  }
+
+  /* Explicit close (X) button pinned to the top-right of the sheet. */
+  .drawerClose {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .drawerClose:hover {
+    color: var(--text);
+    background: var(--surface-hover, var(--surface));
+  }
+
+  .drawerCloseIcon {
+    display: inline-flex;
+  }
+  .drawerCloseIcon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
   }
 }

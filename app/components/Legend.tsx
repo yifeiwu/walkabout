@@ -1,31 +1,48 @@
 "use client";
 
+import { useMemo } from "react";
 import { GROUPS, SUBCATEGORIES } from "@/app/lib/categories";
 import { iconSvg } from "@/app/lib/icons";
-import type { AreaData } from "@/app/lib/types";
+import { haversineMeters, formatDistance } from "@/app/lib/geo";
+import type { AreaData, PoiFeature } from "@/app/lib/types";
 import styles from "../page.module.css";
+
+// Upper bound on how many individual entries a subcategory renders at once, so a
+// dense layer (hundreds of results) can't flood the sidebar. Nearest are kept.
+const MAX_ENTRIES = 200;
 
 interface LegendProps {
   visible: Record<string, boolean>;
   expanded: Record<string, boolean>;
+  expandedSubs: Record<string, boolean>;
   areaData: AreaData;
+  featuresBySub: Record<string, PoiFeature[]>;
+  center: [number, number];
   totalFeatures: number;
   onToggleSub: (id: string) => void;
   onSetGroup: (groupId: string, on: boolean) => void;
   onSetAll: (on: boolean) => void;
   onToggleExpand: (groupId: string) => void;
+  onToggleSubExpand: (subId: string) => void;
+  onHighlightFeature: (feature: PoiFeature) => void;
 }
 
-// Two-level overlay legend: groups expand into subcategories with live counts.
+// Three-level overlay legend: groups expand into subcategories (with live
+// counts), and each subcategory expands into its individual fetched entries.
 export default function Legend({
   visible,
   expanded,
+  expandedSubs,
   areaData,
+  featuresBySub,
+  center,
   totalFeatures,
   onToggleSub,
   onSetGroup,
   onSetAll,
   onToggleExpand,
+  onToggleSubExpand,
+  onHighlightFeature,
 }: LegendProps) {
   const totalLayers = SUBCATEGORIES.length;
   const activeLayers = SUBCATEGORIES.reduce((n, s) => n + (visible[s.id] ? 1 : 0), 0);
@@ -121,20 +138,12 @@ export default function Legend({
             </div>
             {expanded[g.id] && (
               <div className={styles.subList}>
-                {g.subcategories.map((s) => (
-                  <label key={s.id} className={styles.subRow}>
-                    <input
-                      type="checkbox"
-                      checked={!!visible[s.id]}
-                      onChange={() => onToggleSub(s.id)}
-                    />
-                    <span
-                      className={styles.subIcon}
-                      style={{ color: g.color }}
-                      aria-hidden
-                      dangerouslySetInnerHTML={{ __html: iconSvg(s.icon) }}
-                    />
-                    <span className={styles.subLabel}>
+                {g.subcategories.map((s) => {
+                  const entries = featuresBySub[s.id];
+                  const hasEntries = !!entries && entries.length > 0;
+                  const subOpen = hasEntries && !!expandedSubs[s.id];
+                  const label = (
+                    <>
                       {s.label}
                       {areaData.truncated.has(s.id) && (
                         <span className={styles.capped} title="Capped subset">
@@ -142,28 +151,107 @@ export default function Legend({
                           (capped)
                         </span>
                       )}
-                    </span>
-                    <span className={styles.count}>
-                      {areaData.loading.has(s.id) ? (
-                        <span className={styles.rowSpinner} aria-label="Loading" />
-                      ) : visible[s.id] && areaData.loaded.has(s.id) ? (
-                        areaData.counts[s.id] ?? 0
-                      ) : (
+                    </>
+                  );
+                  return (
+                    <div key={s.id} className={styles.subItem}>
+                      <div className={styles.subRow}>
+                        <input
+                          type="checkbox"
+                          checked={!!visible[s.id]}
+                          onChange={() => onToggleSub(s.id)}
+                          aria-label={s.label}
+                        />
                         <span
-                          className={styles.countMuted}
-                          title="Select to show on the map"
-                        >
-                          –
+                          className={styles.subIcon}
+                          style={{ color: g.color }}
+                          aria-hidden
+                          dangerouslySetInnerHTML={{ __html: iconSvg(s.icon) }}
+                        />
+                        {hasEntries ? (
+                          <button
+                            type="button"
+                            className={styles.subLabelButton}
+                            onClick={() => onToggleSubExpand(s.id)}
+                            aria-expanded={subOpen}
+                          >
+                            <span className={styles.subLabel}>{label}</span>
+                            <span className={styles.caret}>{subOpen ? "▾" : "▸"}</span>
+                          </button>
+                        ) : (
+                          <span className={styles.subLabel}>{label}</span>
+                        )}
+                        <span className={styles.count}>
+                          {areaData.loading.has(s.id) ? (
+                            <span className={styles.rowSpinner} aria-label="Loading" />
+                          ) : visible[s.id] && areaData.loaded.has(s.id) ? (
+                            areaData.counts[s.id] ?? 0
+                          ) : (
+                            <span
+                              className={styles.countMuted}
+                              title="Select to show on the map"
+                            >
+                              –
+                            </span>
+                          )}
                         </span>
+                      </div>
+                      {subOpen && entries && (
+                        <SubEntryList
+                          entries={entries}
+                          center={center}
+                          onHighlight={onHighlightFeature}
+                        />
                       )}
-                    </span>
-                  </label>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         );
       })}
     </div>
+  );
+}
+
+// The individual fetched POIs for one subcategory, sorted nearest-first and
+// capped. Clicking a row asks the map to pulse that point (no view change).
+function SubEntryList({
+  entries,
+  center,
+  onHighlight,
+}: {
+  entries: PoiFeature[];
+  center: [number, number];
+  onHighlight: (feature: PoiFeature) => void;
+}) {
+  const sorted = useMemo(
+    () =>
+      entries
+        .map((f) => ({ f, dist: haversineMeters(center, [f.lat, f.lon]) }))
+        .sort((a, b) => a.dist - b.dist),
+    [entries, center],
+  );
+  const shown = sorted.slice(0, MAX_ENTRIES);
+  const extra = sorted.length - shown.length;
+
+  return (
+    <ul className={styles.entryList}>
+      {shown.map(({ f, dist }) => (
+        <li key={f.id}>
+          <button
+            type="button"
+            className={styles.entryRow}
+            onClick={() => onHighlight(f)}
+            title={f.name}
+          >
+            <span className={styles.entryName}>{f.name}</span>
+            <span className={styles.entryDist}>{formatDistance(dist)}</span>
+          </button>
+        </li>
+      ))}
+      {extra > 0 && <li className={styles.entryMore}>+{extra} more</li>}
+    </ul>
   );
 }

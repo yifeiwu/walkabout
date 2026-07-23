@@ -103,6 +103,38 @@ body {
   opacity: 0.92;
 }
 
+/* Transient highlight ring dropped when an entry is clicked in the legend.
+   Built as a raw-HTML divIcon, so it must be styled globally. */
+.poi-pulse-icon {
+  background: transparent;
+  border: none;
+}
+
+.poi-pulse {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 3px solid var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+  animation: poiPulse 1.6s ease-out forwards;
+}
+
+@keyframes poiPulse {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.6);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
 .poi-popup strong {
   font-size: 14px;
 }

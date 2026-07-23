@@ -40,6 +40,7 @@ import {
   HeartPulse,
   Clapperboard,
   Search,
+  X,
 } from "lucide-static";
 
 export const ICONS = {
@@ -76,6 +77,7 @@ export const ICONS = {
   "heart-pulse": HeartPulse,
   clapperboard: Clapperboard,
   search: Search,
+  x: X,
 } as const;
 
 export type IconKey = keyof typeof ICONS;

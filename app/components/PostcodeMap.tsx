@@ -7,6 +7,7 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { SUB_BY_ID, type FlatSub } from "@/app/lib/categories";
+import { iconSvg } from "@/app/lib/icons";
 import type { PoiFeature } from "@/app/lib/types";
 
 interface Props {
@@ -168,10 +169,13 @@ function clusterRadiusForZoom(zoom: number): number {
   return 24;
 }
 
-function markerIcon(emoji: string, color: string): L.DivIcon {
+// `iconKey` is a semantic key (see app/lib/icons.ts) resolved to a Lucide SVG.
+// The SVG strokes with `currentColor`, so the white glyph comes from the div's
+// `color`, while the group colour fills the circular background.
+function markerIcon(iconKey: string, color: string): L.DivIcon {
   return L.divIcon({
     className: "poi-divicon",
-    html: `<div class="poi-marker" style="background:${color}">${emoji}</div>`,
+    html: `<div class="poi-marker" style="background:${color};color:#fff">${iconSvg(iconKey)}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
     popupAnchor: [0, -14],

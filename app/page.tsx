@@ -13,7 +13,16 @@ import type {
 } from "@/app/lib/types";
 import SearchForm from "@/app/components/SearchForm";
 import Legend from "@/app/components/Legend";
+import { iconSvg } from "@/app/lib/icons";
+import defaultPoiSnapshot from "@/app/lib/defaultPoiSnapshot.json";
 import styles from "./page.module.css";
+
+// Pre-fetched POIs for the default location, bundled at build time. Used to
+// paint the default area instantly on first load without hitting Overpass; any
+// search for a real address still triggers a live API call. Regenerate with:
+//   curl 'http://localhost:3000/api/overpass?lat=-35.2809&lon=149.13&radius=500' \
+//     -o app/lib/defaultPoiSnapshot.json
+const DEFAULT_POI_SNAPSHOT = defaultPoiSnapshot as OverpassResponse;
 
 const PostcodeMap = dynamic(() => import("@/app/components/PostcodeMap"), {
   ssr: false,
@@ -21,7 +30,6 @@ const PostcodeMap = dynamic(() => import("@/app/components/PostcodeMap"), {
 });
 
 const VISIBILITY_KEY = "walkabout.visibility.v4";
-const LAST_SEARCH_KEY = "walkabout.lastSearch.v2";
 // Per-tab cache of fetched features so a reload (or returning to a recent area)
 // is instant and avoids re-hitting Overpass. Bumped if the cache shape changes.
 const FEATURE_CACHE_KEY = "walkabout.featureCache.v1";
@@ -31,26 +39,45 @@ interface PersistedCache {
   truncated: Record<string, boolean>;
 }
 
-interface SavedSearch {
+interface DefaultLocation {
   q: string;
   center: [number, number];
   displayName: string;
   radius: number;
 }
 
-// Shown on the very first visit so the map is populated immediately rather than
-// presenting a blank prompt. Centred on the Giant Koala at Dadswells Bridge so
-// the default Attractions layer has something to show off.
-const DEFAULT_SEARCH: SavedSearch = {
-  q: "5829, Western Highway, Dadswells Bridge, Victoria, 3385, Australia",
-  center: [-36.918282, 142.5140123],
-  displayName: "5829 Western Highway, Dadswells Bridge, Victoria 3385, Australia",
+// Shown whenever there's no ?q= in the URL (first visit or a plain refresh) so
+// the map is populated immediately rather than presenting a blank prompt.
+// Centred on Canberra's Civic (city centre) — a dense, well-mapped area that
+// shows the overlays off.
+const DEFAULT_SEARCH: DefaultLocation = {
+  q: "Canberra, Australian Capital Territory, Australia",
+  center: [-35.2809, 149.13],
+  displayName: "Canberra, Australian Capital Territory, Australia",
   radius: DEFAULT_RADIUS,
 };
 
 // Cache key for a subcategory's features at a given snapped area.
 function areaKeyFor(center: [number, number], radius: number): string {
   return `${center[0].toFixed(3)},${center[1].toFixed(3)},${radius}`;
+}
+
+// Turn the bundled default-location snapshot into cache/truncation seeds keyed
+// exactly like a live fetch would be. Every subcategory gets an entry (an empty
+// array when the snapshot has none) so the load effect treats the whole default
+// area as already-fetched and never issues a live Overpass request for it.
+function buildDefaultSeed(): {
+  cache: Record<string, PoiFeature[]>;
+  truncated: Record<string, boolean>;
+} {
+  const ak = areaKeyFor(DEFAULT_SEARCH.center, DEFAULT_SEARCH.radius);
+  const bySub: Record<string, PoiFeature[]> = {};
+  for (const f of DEFAULT_POI_SNAPSHOT.features) (bySub[f.subId] ??= []).push(f);
+  const cache: Record<string, PoiFeature[]> = {};
+  for (const s of SUBCATEGORIES) cache[`${ak}::${s.id}`] = bySub[s.id] ?? [];
+  const truncated: Record<string, boolean> = {};
+  for (const id of DEFAULT_POI_SNAPSHOT.truncatedSubs) truncated[`${ak}::${id}`] = true;
+  return { cache, truncated };
 }
 
 export default function Home() {
@@ -65,8 +92,10 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
   const [visible, setVisible] = useState<Record<string, boolean>>(defaultVisibility);
+  // Groups start collapsed so the sidebar stays compact; users expand the
+  // categories they care about. Group-level counts are still shown collapsed.
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(GROUPS.map((g) => [g.id, g.subcategories.some((s) => s.defaultOn)])),
+    Object.fromEntries(GROUPS.map((g) => [g.id, false])),
   );
 
   // Per-subcategory feature cache (keyed by `${areaKey}::${subId}`), held in
@@ -81,6 +110,11 @@ export default function Home() {
 
   const inflight = useRef<Set<AbortController>>(new Set());
   const didInit = useRef(false);
+
+  // Refs for mobile-drawer focus management (see the effect below).
+  const drawerToggleRef = useRef<HTMLButtonElement>(null);
+  const drawerHandleRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
 
   const areaKey = geo ? areaKeyFor(geo.center, radius) : null;
 
@@ -234,51 +268,35 @@ export default function Home() {
     const r = parseInt(params.get("r") ?? "", 10);
     const useRadius = r && RADIUS_OPTIONS.includes(r) ? r : DEFAULT_RADIUS;
 
-    // 1) URL params win (shareable links). 2) Otherwise restore the last
-    // search. 3) Otherwise default to a city so the first paint is populated.
+    // 1) URL params win (shareable links). 2) Otherwise fall back to the
+    // default location. There is deliberately no "last search" memory — a plain
+    // refresh (no ?q=) always lands on the default rather than the previous area.
     if (q) {
       setAddress(q);
       runSearch(q, useRadius);
       return;
     }
 
-    let restored: SavedSearch | null = null;
-    try {
-      const saved = localStorage.getItem(LAST_SEARCH_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as SavedSearch;
-        if (Array.isArray(parsed.center) && parsed.center.length === 2 && parsed.q) {
-          restored = parsed;
-        }
-      }
-    } catch {
-      /* ignore */
+    // Seed the cache from the bundled snapshot so the default location paints
+    // instantly without an Overpass call. Marking every key requested stops the
+    // load effect from re-fetching it. Any already-rehydrated sessionStorage
+    // data wins on merge, so a fresher live result from a prior visit is kept.
+    const seed = buildDefaultSeed();
+    setCache((prev) => ({ ...seed.cache, ...prev }));
+    if (Object.keys(seed.truncated).length) {
+      setTruncatedMap((prev) => ({ ...seed.truncated, ...prev }));
     }
+    for (const key of Object.keys(seed.cache)) requestedRef.current.add(key);
 
-    const initial = restored ?? DEFAULT_SEARCH;
-    setAddress(initial.q);
-    setRadius(RADIUS_OPTIONS.includes(initial.radius) ? initial.radius : DEFAULT_RADIUS);
-    setLastQuery(initial.q);
+    setAddress(DEFAULT_SEARCH.q);
+    setRadius(RADIUS_OPTIONS.includes(DEFAULT_SEARCH.radius) ? DEFAULT_SEARCH.radius : DEFAULT_RADIUS);
+    // Deliberately leave `lastQuery` empty for the default: this keeps the URL
+    // clean (no ?q=), so a refresh has no address to search and lands back on
+    // the static default rather than triggering a live call.
     // Set geo directly (no geocode round-trip) so the map mounts immediately.
-    setGeo({ center: initial.center, displayName: initial.displayName });
+    setGeo({ center: DEFAULT_SEARCH.center, displayName: DEFAULT_SEARCH.displayName });
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [runSearch]);
-
-  // Persist the last successful search so returning visitors land back here.
-  useEffect(() => {
-    if (!geo || !lastQuery) return;
-    try {
-      const payload: SavedSearch = {
-        q: lastQuery,
-        center: geo.center,
-        displayName: geo.displayName,
-        radius,
-      };
-      localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify(payload));
-    } catch {
-      /* ignore */
-    }
-  }, [geo, radius, lastQuery]);
 
   // Persist visibility.
   useEffect(() => {
@@ -304,6 +322,48 @@ export default function Home() {
     }, 500);
     return () => clearTimeout(t);
   }, [cache, truncatedMap]);
+
+  // Mobile drawer accessibility: while the bottom sheet is open, close it on
+  // Escape, trap Tab focus inside it, move focus into the sheet on open, and
+  // return focus to the toggle button on close. No-ops on desktop, where the
+  // toggle is hidden and the drawer never opens.
+  useEffect(() => {
+    if (!drawerOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDrawerOpen(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusables = sidebarRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusables || focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    // Move focus into the sheet so keyboard users start inside it.
+    drawerHandleRef.current?.focus();
+
+    // The toggle is stable for the drawer's lifetime, so capture it now for the
+    // cleanup (avoids reading a possibly-changed ref during teardown).
+    const toggle = drawerToggleRef.current;
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      // Return focus to the button that opened the drawer.
+      toggle?.focus();
+    };
+  }, [drawerOpen]);
 
   // ---- Derived per-area data (counts, loaded set, truncation) --------------
   const areaData: AreaData = useMemo(() => {
@@ -385,12 +445,20 @@ export default function Home() {
     <main className={styles.main}>
       {/* Mobile-only: opens the bottom-sheet drawer. Hidden on desktop. */}
       <button
+        ref={drawerToggleRef}
         type="button"
         className={styles.drawerToggle}
         onClick={() => setDrawerOpen(true)}
         aria-label="Open search and filters"
+        aria-haspopup="dialog"
+        aria-expanded={drawerOpen}
       >
-        🔎 Search &amp; filters
+        <span
+          className={styles.drawerToggleIcon}
+          aria-hidden
+          dangerouslySetInnerHTML={{ __html: iconSvg("search") }}
+        />
+        Search &amp; filters
       </button>
       {/* Mobile-only backdrop; tapping it dismisses the drawer. */}
       <div
@@ -399,9 +467,16 @@ export default function Home() {
         aria-hidden
       />
 
-      <aside className={`${styles.sidebar} ${drawerOpen ? styles.sidebarOpen : ""}`}>
+      <aside
+        ref={sidebarRef}
+        className={`${styles.sidebar} ${drawerOpen ? styles.sidebarOpen : ""}`}
+        role={drawerOpen ? "dialog" : undefined}
+        aria-modal={drawerOpen ? true : undefined}
+        aria-label={drawerOpen ? "Search and filters" : undefined}
+      >
         {/* Mobile-only grab handle to collapse the drawer. Hidden on desktop. */}
         <button
+          ref={drawerHandleRef}
           type="button"
           className={styles.drawerHandle}
           onClick={() => setDrawerOpen(false)}

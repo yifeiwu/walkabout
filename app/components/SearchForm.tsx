@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { RADIUS_OPTIONS, formatRadius } from "@/app/lib/constants";
+import { iconSvg } from "@/app/lib/icons";
 import { fetchJson } from "@/app/lib/fetchJson";
 import type { AutocompleteItem, GeocodeResult } from "@/app/lib/types";
 import styles from "../page.module.css";
@@ -132,9 +133,11 @@ export default function SearchForm({
       }}
     >
       <div className={styles.searchWrap}>
-        <span className={styles.searchIcon} aria-hidden>
-          🔎
-        </span>
+        <span
+          className={styles.searchIcon}
+          aria-hidden
+          dangerouslySetInnerHTML={{ __html: iconSvg("search") }}
+        />
         <input
           ref={inputRef}
           className={styles.input}

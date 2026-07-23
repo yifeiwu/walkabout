@@ -1,6 +1,7 @@
 "use client";
 
 import { GROUPS, SUBCATEGORIES } from "@/app/lib/categories";
+import { iconSvg } from "@/app/lib/icons";
 import type { AreaData } from "@/app/lib/types";
 import styles from "../page.module.css";
 
@@ -98,9 +99,8 @@ export default function Legend({
                 className={styles.swatch}
                 style={{ background: g.color }}
                 aria-hidden
-              >
-                {g.icon}
-              </span>
+                dangerouslySetInnerHTML={{ __html: iconSvg(g.icon) }}
+              />
               <button
                 type="button"
                 className={styles.groupLabel}
@@ -128,7 +128,12 @@ export default function Legend({
                       checked={!!visible[s.id]}
                       onChange={() => onToggleSub(s.id)}
                     />
-                    <span className={styles.subIcon}>{s.icon}</span>
+                    <span
+                      className={styles.subIcon}
+                      style={{ color: g.color }}
+                      aria-hidden
+                      dangerouslySetInnerHTML={{ __html: iconSvg(s.icon) }}
+                    />
                     <span className={styles.subLabel}>
                       {s.label}
                       {areaData.truncated.has(s.id) && (

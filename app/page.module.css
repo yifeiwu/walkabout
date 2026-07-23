@@ -27,6 +27,17 @@
   display: none;
 }
 
+/* Icon inside the mobile "Search & filters" pill (white on the accent fill). */
+.drawerToggleIcon {
+  display: inline-flex;
+}
+
+.drawerToggleIcon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 .title {
   font-size: 22px;
   font-weight: 700;
@@ -56,12 +67,18 @@
 
 .searchIcon {
   position: absolute;
-  left: 12px;
+  left: 11px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 13px;
-  opacity: 0.6;
+  display: flex;
+  color: var(--text-muted);
   pointer-events: none;
+}
+
+.searchIcon svg {
+  width: 15px;
+  height: 15px;
+  display: block;
 }
 
 .clearButton {
@@ -360,9 +377,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  color: #fff;
   line-height: 1;
   box-shadow: var(--shadow-sm);
+}
+
+.swatch svg {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .groupLabel {
@@ -408,9 +431,16 @@
 
 .subIcon {
   width: 18px;
-  text-align: center;
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+}
+
+.subIcon svg {
+  width: 15px;
+  height: 15px;
+  display: block;
 }
 
 .subLabel {

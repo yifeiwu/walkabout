@@ -61,7 +61,7 @@ body {
   font: inherit;
 }
 
-/* Custom emoji markers (built as raw HTML, so styles must be global). */
+/* Custom SVG markers (built as raw HTML, so styles must be global). */
 .poi-divicon {
   background: transparent;
   border: none;
@@ -74,10 +74,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
   line-height: 1;
   border: 2px solid #ffffff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+/* Lucide icons stroke with currentColor; the marker sets color:#fff inline. */
+.poi-marker svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 .poi-cluster {

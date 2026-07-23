@@ -18,7 +18,7 @@ export interface TagFilter {
 export interface SubCategory {
   id: string;
   label: string;
-  icon: string; // emoji glyph rendered inside the marker
+  icon: string; // icon key resolved to an SVG via app/lib/icons.ts
   render: RenderKind;
   defaultOn: boolean;
   filters: TagFilter[];
@@ -31,7 +31,7 @@ export interface Group {
   id: string;
   label: string;
   color: string;
-  icon: string; // emoji glyph representing the group in the legend
+  icon: string; // icon key resolved to an SVG via app/lib/icons.ts
   subcategories: SubCategory[];
 }
 
@@ -67,23 +67,23 @@ export const GROUPS: Group[] = [
     id: "transport",
     label: "Transport",
     color: "#2563eb",
-    icon: "🚉",
+    icon: "train-front",
     subcategories: [
-      sub("stations", "Train & Tram Stations", "🚉", [
+      sub("stations", "Train & Tram Stations", "train-front", [
         { types: ["node", "way"], key: "railway", values: ["station", "halt", "tram_stop"] },
         { types: ["node"], key: "public_transport", values: ["station"] },
       ]),
       sub(
         "bus",
         "Bus Stops",
-        "🚌",
+        "bus",
         [{ types: ["node"], key: "highway", values: ["bus_stop"] }],
         { defaultOn: false, maxFeatures: 400 },
       ),
       sub(
         "rail_lines",
         "Rail & Tram Lines",
-        "🚆",
+        "train-track",
         [
           {
             types: ["way"],
@@ -99,30 +99,30 @@ export const GROUPS: Group[] = [
     id: "food",
     label: "Food & Drink",
     color: "#dc2626",
-    icon: "🍽️",
+    icon: "utensils",
     subcategories: [
-      sub("restaurants", "Restaurants", "🍽️", [PT("amenity", ["restaurant"])]),
-      sub("cafes", "Cafes", "☕", [PT("amenity", ["cafe"])]),
-      sub("fast_food", "Fast Food", "🍔", [PT("amenity", ["fast_food", "food_court"])], {
+      sub("restaurants", "Restaurants", "utensils", [PT("amenity", ["restaurant"])]),
+      sub("cafes", "Cafes", "coffee", [PT("amenity", ["cafe"])]),
+      sub("fast_food", "Fast Food", "sandwich", [PT("amenity", ["fast_food", "food_court"])], {
         defaultOn: false,
       }),
-      sub("bars", "Bars & Pubs", "🍺", [PT("amenity", ["bar", "pub", "biergarten"])]),
+      sub("bars", "Bars & Pubs", "beer", [PT("amenity", ["bar", "pub", "biergarten"])]),
     ],
   },
   {
     id: "shopping",
     label: "Shopping",
     color: "#ea580c",
-    icon: "🛍️",
+    icon: "shopping-bag",
     subcategories: [
-      sub("supermarkets", "Supermarkets", "🛒", [PT("shop", ["supermarket"])]),
-      sub("convenience", "Convenience & Grocery", "🏪", [
+      sub("supermarkets", "Supermarkets", "shopping-cart", [PT("shop", ["supermarket"])]),
+      sub("convenience", "Convenience & Grocery", "store", [
         PT("shop", ["convenience", "grocery", "greengrocer", "general"]),
       ]),
       sub(
         "retail",
         "Shops & Malls",
-        "🛍️",
+        "shopping-bag",
         [PT("shop", ["mall", "department_store"]), PT("amenity", ["marketplace"])],
         { defaultOn: false },
       ),
@@ -132,13 +132,13 @@ export const GROUPS: Group[] = [
     id: "parks",
     label: "Parks & Recreation",
     color: "#16a34a",
-    icon: "🌳",
+    icon: "trees",
     subcategories: [
-      sub("parks", "Parks & Gardens", "🌳", [
+      sub("parks", "Parks & Gardens", "trees", [
         PT("leisure", ["park", "garden", "nature_reserve", "recreation_ground"]),
       ]),
-      sub("playgrounds", "Playgrounds", "🛝", [PT("leisure", ["playground"])]),
-      sub("sports", "Sports & Fitness", "⚽", [
+      sub("playgrounds", "Playgrounds", "blocks", [PT("leisure", ["playground"])]),
+      sub("sports", "Sports & Fitness", "dumbbell", [
         PT("leisure", ["sports_centre", "pitch", "fitness_centre", "stadium"]),
       ]),
     ],
@@ -147,27 +147,27 @@ export const GROUPS: Group[] = [
     id: "education",
     label: "Education",
     color: "#7c3aed",
-    icon: "🎓",
+    icon: "graduation-cap",
     subcategories: [
-      sub("schools", "Schools", "🏫", [PT("amenity", ["school"])]),
-      sub("early_childhood", "Early Childhood", "🧸", [PT("amenity", ["kindergarten"])], {
+      sub("schools", "Schools", "school", [PT("amenity", ["school"])]),
+      sub("early_childhood", "Early Childhood", "baby", [PT("amenity", ["kindergarten"])], {
         defaultOn: false,
       }),
-      sub("tertiary", "TAFE & Universities", "🎓", [PT("amenity", ["college", "university"])]),
+      sub("tertiary", "TAFE & Universities", "graduation-cap", [PT("amenity", ["college", "university"])]),
     ],
   },
   {
     id: "civic",
     label: "Civic & Community",
     color: "#0891b2",
-    icon: "🏛️",
+    icon: "landmark",
     subcategories: [
-      sub("libraries", "Libraries", "📚", [PT("amenity", ["library"])]),
-      sub("community", "Community & Government", "🏛️", [
+      sub("libraries", "Libraries", "library", [PT("amenity", ["library"])]),
+      sub("community", "Community & Government", "users", [
         PT("amenity", ["community_centre", "townhall"]),
       ]),
-      sub("post", "Post Offices", "📮", [PT("amenity", ["post_office"])], { defaultOn: false }),
-      sub("worship", "Places of Worship", "⛪", [PT("amenity", ["place_of_worship"])], {
+      sub("post", "Post Offices", "mail", [PT("amenity", ["post_office"])], { defaultOn: false }),
+      sub("worship", "Places of Worship", "church", [PT("amenity", ["place_of_worship"])], {
         defaultOn: false,
       }),
     ],
@@ -176,10 +176,10 @@ export const GROUPS: Group[] = [
     id: "health",
     label: "Health",
     color: "#db2777",
-    icon: "🏥",
+    icon: "heart-pulse",
     subcategories: [
-      sub("pharmacies", "Pharmacies", "💊", [PT("amenity", ["pharmacy"])]),
-      sub("medical", "Medical & Dental", "🏥", [
+      sub("pharmacies", "Pharmacies", "pill", [PT("amenity", ["pharmacy"])]),
+      sub("medical", "Medical & Dental", "stethoscope", [
         PT("amenity", ["clinic", "doctors", "dentist", "hospital"]),
       ]),
     ],
@@ -188,10 +188,10 @@ export const GROUPS: Group[] = [
     id: "services",
     label: "Money & Services",
     color: "#ca8a04",
-    icon: "🏧",
+    icon: "banknote",
     subcategories: [
-      sub("banks", "Banks & ATMs", "🏧", [PT("amenity", ["bank", "atm"])], { defaultOn: false }),
-      sub("fuel", "Fuel & EV Charging", "⛽", [PT("amenity", ["fuel", "charging_station"])], {
+      sub("banks", "Banks & ATMs", "banknote", [PT("amenity", ["bank", "atm"])], { defaultOn: false }),
+      sub("fuel", "Fuel & EV Charging", "fuel", [PT("amenity", ["fuel", "charging_station"])], {
         defaultOn: false,
       }),
     ],
@@ -200,24 +200,24 @@ export const GROUPS: Group[] = [
     id: "entertainment",
     label: "Entertainment",
     color: "#c026d3",
-    icon: "🎬",
+    icon: "clapperboard",
     subcategories: [
-      sub("cinemas", "Cinemas & Theatres", "🎬", [
+      sub("cinemas", "Cinemas & Theatres", "film", [
         PT("amenity", ["cinema", "theatre", "arts_centre"]),
       ]),
-      sub("nightlife", "Nightlife", "🎶", [PT("amenity", ["nightclub"])], { defaultOn: false }),
+      sub("nightlife", "Nightlife", "music", [PT("amenity", ["nightclub"])], { defaultOn: false }),
     ],
   },
   {
     id: "attractions",
     label: "Attractions",
     color: "#4f46e5",
-    icon: "🗺️",
+    icon: "map-pin",
     subcategories: [
       sub(
         "landmarks",
         "Landmarks & Sights",
-        "🗽",
+        "landmark",
         [
           PT("tourism", ["attraction", "viewpoint", "artwork"]),
           PT("historic", [
@@ -235,13 +235,13 @@ export const GROUPS: Group[] = [
         ],
         { defaultOn: true },
       ),
-      sub("museums", "Museums & Galleries", "🖼️", [PT("tourism", ["museum", "gallery"])], {
+      sub("museums", "Museums & Galleries", "image", [PT("tourism", ["museum", "gallery"])], {
         defaultOn: true,
       }),
       sub(
         "themeparks",
         "Zoos & Theme Parks",
-        "🎢",
+        "ferris-wheel",
         [
           PT("tourism", ["zoo", "theme_park", "aquarium"]),
           PT("leisure", ["water_park"]),

@@ -32,6 +32,10 @@ interface Props {
   featuresBySub: Record<string, PoiFeature[]>;
   visible: Record<string, boolean>;
   highlight: HighlightRequest | null;
+  // Describes the map for assistive tech (the Leaflet canvas itself is opaque to
+  // screen readers). A visually-hidden textual summary lives alongside it in the
+  // page for the actual place counts.
+  ariaLabel?: string;
 }
 
 export default function PostcodeMap({
@@ -40,6 +44,7 @@ export default function PostcodeMap({
   featuresBySub,
   visible,
   highlight,
+  ariaLabel = "Interactive map of nearby places",
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -264,7 +269,14 @@ export default function PostcodeMap({
     }
   }, [featuresBySub, visible, buildMarkers, buildLineLayer]);
 
-  return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
+  return (
+    <div
+      ref={containerRef}
+      style={{ height: "100%", width: "100%" }}
+      role="application"
+      aria-label={ariaLabel}
+    />
+  );
 }
 
 // Pixel radius within which markers are merged into a single cluster. The

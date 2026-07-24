@@ -19,6 +19,11 @@ import type {
   PoiFeature,
 } from "@/app/lib/types";
 
+// A failed request captured so it can be replayed on "Try again".
+type RetryAction =
+  | { kind: "load"; center: [number, number]; r: number; subIds: string[] }
+  | { kind: "search"; query: string; searchRadius: number; pre?: GeocodeResult };
+
 export interface PoiData {
   address: string;
   setAddress: (value: string) => void;
@@ -34,6 +39,9 @@ export interface PoiData {
   featuresBySub: Record<string, PoiFeature[]>;
   runSearch: (query: string, searchRadius: number, pre?: GeocodeResult) => void;
   clearSearch: () => void;
+  // Re-run whichever action (search or category load) last failed, clearing the
+  // error. No-op when there's nothing to retry.
+  retry: () => void;
 }
 
 // The search + POI-data engine. Owns the geocoded area, the per-subcategory
@@ -61,6 +69,11 @@ export function usePoiData(visible: Record<string, boolean>): PoiData {
 
   const inflight = useRef<Set<AbortController>>(new Set());
   const didInit = useRef(false);
+  // The action to replay when the user hits "Try again" — set by whichever
+  // request most recently failed, cleared once retried or superseded. Stored as
+  // plain data (not a closure) so `loadSubs`/`runSearch` don't have to depend on
+  // themselves.
+  const retryRef = useRef<RetryAction | null>(null);
 
   const areaKey = geo ? areaKeyFor(geo.center, radius) : null;
 
@@ -110,9 +123,11 @@ export function usePoiData(visible: Record<string, boolean>): PoiData {
           });
         }
       } catch (e) {
-        // Drop the keys so a later effect run can retry this area/subcategory.
+        // Drop the keys so a later effect run (or an explicit retry) can re-fetch
+        // this area/subcategory.
         for (const id of missing) requestedRef.current.delete(featureKey(ak, id));
         if (e instanceof DOMException && e.name === "AbortError") return;
+        retryRef.current = { kind: "load", center, r, subIds: missing };
         setError(e instanceof Error ? e.message : "Could not load map data.");
       } finally {
         inflight.current.delete(controller);
@@ -148,6 +163,7 @@ export function usePoiData(visible: Record<string, boolean>): PoiData {
         setLastQuery(q);
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
+        retryRef.current = { kind: "search", query, searchRadius, pre };
         setError(e instanceof Error ? e.message : "Something went wrong.");
       } finally {
         inflight.current.delete(controller);
@@ -303,6 +319,15 @@ export function usePoiData(visible: Record<string, boolean>): PoiData {
     window.history.replaceState(null, "", url.toString());
   }, []);
 
+  const retry = useCallback(() => {
+    const action = retryRef.current;
+    retryRef.current = null;
+    setError(null);
+    if (!action) return;
+    if (action.kind === "load") loadSubs(action.center, action.r, action.subIds);
+    else runSearch(action.query, action.searchRadius, action.pre);
+  }, [loadSubs, runSearch]);
+
   return {
     address,
     setAddress,
@@ -315,5 +340,6 @@ export function usePoiData(visible: Record<string, boolean>): PoiData {
     featuresBySub,
     runSearch,
     clearSearch,
+    retry,
   };
 }

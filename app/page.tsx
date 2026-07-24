@@ -147,7 +147,18 @@ export default function Home() {
           geocoding={data.geocoding}
         />
 
-        {data.error && <p className={styles.error}>{data.error}</p>}
+        {data.error && (
+          <div className={styles.error} role="alert">
+            <span>{data.error}</span>
+            <button
+              type="button"
+              className={styles.errorRetry}
+              onClick={data.retry}
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
         {geo && (
           <p className={styles.located}>
@@ -182,6 +193,12 @@ export default function Home() {
       </aside>
 
       <section className={styles.mapArea}>
+        {geo && (
+          <p className={styles.srOnly} aria-live="polite">
+            Showing {totalFeatures} {totalFeatures === 1 ? "place" : "places"} within{" "}
+            {formatRadius(data.radius)} of {geo.displayName}.
+          </p>
+        )}
         {geo ? (
           <PostcodeMap
             center={geo.center}
@@ -189,6 +206,7 @@ export default function Home() {
             featuresBySub={data.featuresBySub}
             visible={layers.visible}
             highlight={highlight}
+            ariaLabel={`Map centred on ${geo.displayName}`}
           />
         ) : (
           <div className={styles.empty}>

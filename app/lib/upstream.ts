@@ -88,7 +88,9 @@ export async function fetchOverpass(
   const perAttempt = opts.perAttemptTimeoutMs ?? 12_000;
   const budget = opts.overallBudgetMs ?? 45_000;
   const hedgeDelayMs = opts.hedgeDelayMs ?? 3_500;
-  const revalidate = opts.revalidate ?? 3600;
+  // Slow-moving POI data: cache the upstream Overpass response for a day so a
+  // function invocation on a CDN miss still usually avoids re-hitting a mirror.
+  const revalidate = opts.revalidate ?? 86_400;
   const data = encodeURIComponent(query);
   const endpoints = shuffled(OVERPASS_ENDPOINTS);
   const start = Date.now();

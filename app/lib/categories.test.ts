@@ -58,11 +58,27 @@ describe("buildOverpassQuery", () => {
     expect(q).toContain("out tags geom");
   });
 
-  it("includes selectors for representative tags", () => {
-    expect(q).toContain('"amenity"="cafe"');
-    expect(q).toContain('"shop"="supermarket"');
-    // multi-value selector uses an anchored regex
+  it("collapses same-key selectors into a single anchored-regex statement", () => {
+    // amenity values from many subcategories fold into one nw[...] statement.
+    expect(q).toMatch(/nw\["amenity"~"\^\([^"]*\bcafe\b[^"]*\)\$"\]/);
+    expect(q).toMatch(/nw\["amenity"~"\^\([^"]*\brestaurant\b[^"]*\)\$"\]/);
+    expect(q).toMatch(/nw\["shop"~"\^\([^"]*\bsupermarket\b[^"]*\)\$"\]/);
+    // point line output for rail lines keeps its own anchored regex.
     expect(q).toMatch(/"railway"~"\^\(rail\|subway/);
+    // The whole point body issues a single `around` pass per tag key.
+    expect((q.match(/\["amenity"/g) ?? []).length).toBe(1);
+    expect((q.match(/\["shop"/g) ?? []).length).toBe(1);
+  });
+
+  it("uses the nw shorthand for node+way selectors and node for node-only", () => {
+    expect(q).toMatch(/nw\["amenity"/);
+    // public_transport=station is a node-only filter.
+    expect(q).toContain('node["public_transport"="station"]');
+  });
+
+  it("orders output by quadtile for faster emission", () => {
+    expect(q).toContain("out tags center 6000 qt;");
+    expect(q).toContain("out tags geom 2000 qt;");
   });
 
   it("starts with an out:json header and a timeout", () => {

@@ -279,24 +279,79 @@ export function defaultVisibility(): Record<string, boolean> {
 
 // ---- Overpass query building ----------------------------------------------
 
-function selectorFor(filter: TagFilter): string {
-  if (filter.values.length === 1) {
-    return `["${filter.key}"="${filter.values[0]}"]`;
-  }
-  return `["${filter.key}"~"^(${filter.values.join("|")})$"]`;
+// Canonical element order so a set of types maps to a stable Overpass QL
+// shorthand (e.g. node+way -> "nw"), and so grouping keys are order-independent.
+const TYPE_ORDER: OsmElementType[] = ["node", "way", "relation"];
+
+const TYPE_SHORTHAND: Record<string, string> = {
+  node: "node",
+  way: "way",
+  relation: "relation",
+  "node,way": "nw",
+  "node,relation": "nr",
+  "way,relation": "wr",
+  "node,way,relation": "nwr",
+};
+
+// Overpass QL query-type token for a set of element types, using the union
+// shorthands (nw/nr/wr/nwr) so a single statement covers multiple types.
+function typeSelector(types: OsmElementType[]): string {
+  const canonical = TYPE_ORDER.filter((t) => types.includes(t));
+  return TYPE_SHORTHAND[canonical.join(",")] ?? canonical.join("");
 }
 
+// A single tag selector. Exact match for one value (uses Overpass's tag index
+// directly); an anchored alternation regex for several.
+function selectorForValues(key: string, values: string[]): string {
+  if (values.length === 1) {
+    return `["${key}"="${values[0]}"]`;
+  }
+  return `["${key}"~"^(${values.join("|")})$"]`;
+}
+
+// Build the query body for one render kind by folding every filter that shares
+// a tag key *and* element-type set (across all subcategories) into a single
+// statement, unioning their values. Each Overpass statement runs its own
+// `around` spatial pass, so collapsing ~40 per-value/per-type statements down to
+// one-per-(key,types) is the main lever for query time in dense areas. The
+// returned tags are unchanged, so `classify()` still sorts elements back into
+// their subcategories.
 function buildBody(render: RenderKind, around: string, subs: SubCategory[]): string {
-  const lines: string[] = [];
+  interface Group {
+    key: string;
+    types: OsmElementType[];
+    values: string[];
+    seen: Set<string>;
+  }
+  const groups = new Map<string, Group>();
+  const order: string[] = [];
+
   for (const s of subs) {
     if (s.render !== render) continue;
     for (const filter of s.filters) {
-      for (const type of filter.types) {
-        lines.push(`  ${type}${selectorFor(filter)}${around};`);
+      const canonical = TYPE_ORDER.filter((t) => filter.types.includes(t));
+      const groupKey = `${filter.key}|${canonical.join(",")}`;
+      let g = groups.get(groupKey);
+      if (!g) {
+        g = { key: filter.key, types: canonical, values: [], seen: new Set() };
+        groups.set(groupKey, g);
+        order.push(groupKey);
+      }
+      for (const v of filter.values) {
+        if (!g.seen.has(v)) {
+          g.seen.add(v);
+          g.values.push(v);
+        }
       }
     }
   }
-  return lines.join("\n");
+
+  return order
+    .map((groupKey) => {
+      const g = groups.get(groupKey)!;
+      return `  ${typeSelector(g.types)}${selectorForValues(g.key, g.values)}${around};`;
+    })
+    .join("\n");
 }
 
 // Full Overpass query for the given subcategories (defaults to all). Querying
@@ -317,14 +372,16 @@ export function buildOverpassQuery(
   // Keep the server-side timeout aligned with the client's per-attempt budget so
   // a slow query fails fast enough to fall back to another mirror within the
   // serverless function's time limit.
+  // `qt` orders output by quadtile (roughly geographic) index, which Overpass
+  // emits significantly faster than the default id sort.
   const parts = [`[out:json][timeout:20];`];
   if (points.trim().length) {
     parts.push(`(\n${points}\n);`);
-    parts.push(`out tags center 6000;`);
+    parts.push(`out tags center 6000 qt;`);
   }
   if (lineBody.trim().length) {
     parts.push(`(\n${lineBody}\n);`);
-    parts.push(`out tags geom 2000;`);
+    parts.push(`out tags geom 2000 qt;`);
   }
   return parts.join("\n");
 }

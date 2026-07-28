@@ -11,7 +11,10 @@ const MAX_RADIUS = 10000;
 // outside the supported region.
 const AU_BOUNDS = { minLat: -44, maxLat: -9, minLon: 112, maxLon: 154 };
 
-export const revalidate = 3600;
+// OSM POI data changes slowly, so cache aggressively: a day of fresh reuse with
+// a week of stale-while-revalidate keeps repeat/nearby searches instant while
+// still picking up upstream changes within a day.
+export const revalidate = 86400;
 
 // Cap the serverless function's wall-clock time. fetchOverpass works within a
 // smaller budget (see overallBudgetMs), so the route returns a graceful 502
@@ -232,9 +235,12 @@ export async function GET(req: NextRequest) {
     truncatedSubs: [...truncatedSet],
   };
   // Cache at the CDN/edge so repeated or nearby (snapped) searches are instant.
+  // POI data is slow-moving, so a 1-day fresh window with a 1-week
+  // stale-while-revalidate tail maximises hit rate without serving stale data
+  // for long.
   return NextResponse.json(body, {
     headers: {
-      "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+      "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
     },
   });
 }

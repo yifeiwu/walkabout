@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SUBCATEGORIES, defaultVisibility } from "@/app/lib/categories";
-import { DEFAULT_RADIUS, RADIUS_OPTIONS } from "@/app/lib/constants";
+import { DEFAULT_RADIUS, URL_RADIUS_OPTIONS } from "@/app/lib/constants";
 import { areaKeyFor, featureKey } from "@/app/lib/areaKey";
 import {
   DEFAULT_SEARCH,
@@ -212,7 +212,7 @@ export function usePoiData(visible: Record<string, boolean>): PoiData {
     const params = new URLSearchParams(window.location.search);
     const q = params.get("q");
     const r = parseInt(params.get("r") ?? "", 10);
-    const useRadius = r && RADIUS_OPTIONS.includes(r) ? r : DEFAULT_RADIUS;
+    const useRadius = r && URL_RADIUS_OPTIONS.includes(r) ? r : DEFAULT_RADIUS;
 
     // 1) URL params win (shareable links). 2) Otherwise fall back to the
     // default location. There is deliberately no "last search" memory — a plain
@@ -234,7 +234,7 @@ export function usePoiData(visible: Record<string, boolean>): PoiData {
     for (const key of defaultKeys) requestedRef.current.add(key);
 
     setAddress(DEFAULT_SEARCH.q);
-    setRadius(RADIUS_OPTIONS.includes(DEFAULT_SEARCH.radius) ? DEFAULT_SEARCH.radius : DEFAULT_RADIUS);
+    setRadius(URL_RADIUS_OPTIONS.includes(DEFAULT_SEARCH.radius) ? DEFAULT_SEARCH.radius : DEFAULT_RADIUS);
     // Deliberately leave `lastQuery` empty for the default: this keeps the URL
     // clean (no ?q=), so a refresh has no address to search and lands back on
     // the static default rather than triggering a live call.
